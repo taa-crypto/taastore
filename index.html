@@ -561,36 +561,38 @@
     </div>
 
     <!-- Modal Katalog Jual -->
-    <div id="sell-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-      <div class="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-5">
-        <div class="flex items-center justify-between mb-5">
-          <div>
-            <div class="text-[10px] uppercase tracking-[.22em] text-amber-400 font-black">Katalog Jual</div>
-            <h3 class="font-black text-xl text-white" id="sell-item-name">Ajukan Penjualan</h3>
+    <div id="sell-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 z-50">
+      <div class="animated-border p-[2px] rounded-3xl max-w-lg w-full max-h-[92vh] shadow-2xl modal-scale-up">
+        <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-5 relative overflow-y-auto max-h-[92vh]">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <div class="text-[10px] uppercase tracking-[.22em] text-amber-400 font-black">Katalog Jual</div>
+              <h3 class="font-black text-xl text-white" id="sell-item-name">Ajukan Penjualan</h3>
+            </div>
+            <button onclick="closeSellModal()" class="text-slate-400 hover:text-white text-xl">✕</button>
           </div>
-          <button onclick="closeSellModal()" class="text-slate-400 hover:text-white text-xl">✕</button>
+          <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 mb-4">
+            <div class="text-xs text-slate-400">Rate Take</div>
+            <div id="sell-rate-masked" class="text-lg font-black text-amber-400">Rp **.***</div>
+            <p class="text-[10px] text-slate-500 mt-1">Rate lengkap dikonfirmasi langsung oleh Admin melalui WhatsApp sebelum kamu melanjutkan.</p>
+          </div>
+          <form onsubmit="submitSellRequest(event)" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-xs text-slate-400 mb-1 block">Nama Seller</label><input id="sell-name" type="text" placeholder="Nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
+              <div><label class="text-xs text-slate-400 mb-1 block">Jumlah BGL/DL</label><input id="sell-qty" type="number" min="1" value="1" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
+              <input id="sell-game-id" type="text" placeholder="Contoh: Azka07" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm">
+            </div>
+            <div><label class="text-xs text-slate-400 mb-1 block">Catatan (opsional)</label><textarea id="sell-note" rows="2" placeholder="Catatan untuk admin" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></textarea></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+              <p class="text-xs text-slate-300 font-semibold">Setelah rate cocok</p>
+              <p class="text-[10px] text-slate-500 mt-1">Hubungi Admin melalui WhatsApp untuk mengetahui rate lengkap dan instruksi World Drop. Jika rate cocok, klik <b>Setujui & Lanjutkan</b> dari halaman pesanan. Jika tidak cocok, kamu bisa membatalkan pengajuan.</p>
+            </div>
+            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-2xl">Ajukan Penjualan</button>
+          </form>
         </div>
-        <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 mb-4">
-          <div class="text-xs text-slate-400">Rate Take</div>
-          <div id="sell-rate-masked" class="text-lg font-black text-amber-400">Rp **.***</div>
-          <p class="text-[10px] text-slate-500 mt-1">Rate lengkap dikonfirmasi langsung oleh Admin melalui WhatsApp sebelum kamu melanjutkan.</p>
-        </div>
-        <form onsubmit="submitSellRequest(event)" class="space-y-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div><label class="text-xs text-slate-400 mb-1 block">Nama Seller</label><input id="sell-name" type="text" placeholder="Nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
-            <div><label class="text-xs text-slate-400 mb-1 block">Jumlah BGL/DL</label><input id="sell-qty" type="number" min="1" value="1" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div><label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label><input id="sell-game-id" type="text" placeholder="Contoh: Azka07" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
-            <div><label class="text-xs text-slate-400 mb-1 block">World Drop</label><input id="sell-world" type="text" placeholder="Contoh: TAASTORE" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
-          </div>
-          <div><label class="text-xs text-slate-400 mb-1 block">Catatan (opsional)</label><textarea id="sell-note" rows="2" placeholder="Catatan untuk admin" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></textarea></div>
-          <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-            <p class="text-xs text-slate-300 font-semibold">Setelah rate cocok</p>
-            <p class="text-[10px] text-slate-500 mt-1">Kamu bisa klik <b>Setujui & Lanjutkan</b>, lalu lakukan drop ke world dan upload screenshot bukti drop dari halaman pesanan.</p>
-          </div>
-          <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-2xl">Ajukan Penjualan</button>
-        </form>
       </div>
     </div>
 
@@ -780,10 +782,10 @@
     // The original value remains untouched in the data/database.
     function maskTakeRate(value) {
       if (value === null || value === undefined || value === "") return "";
-      const raw = String(value).trim();
-      const digits = raw.replace(/\D/g, "");
-      if (!digits) return raw;
-      if (digits.length <= 3) return `Rp ${digits.charAt(0)}**`;
+      const digits = String(value).replace(/\D/g, "");
+      if (!digits) return "";
+      // Public SELL/TAKE display: always reveal only the leading digit.
+      // Examples: 40.000 -> Rp 4**.***, 45.500 -> Rp 4**.***, 400.000 -> Rp 4**.***.
       return `Rp ${digits.charAt(0)}**.***`;
     }
 
@@ -949,13 +951,10 @@
               ${typeBadge}
             </div>
             <div class="text-amber-400 font-black text-xl mb-2">
-              Rp ${(item.price || 0).toLocaleString('id-ID')}
+              ${isJualItem(item) ? (maskTakeRate(getTakeRate(item)) || 'Rp **.***') : `Rp ${(item.price || 0).toLocaleString('id-ID')}`}
             </div>
-            ${isJualItem(item) && getTakeRate(item) !== null && getTakeRate(item) !== undefined && getTakeRate(item) !== '' ? `
-              <div class="text-slate-400 text-xs mb-4 flex items-center justify-between gap-3">
-                <span class="font-semibold">TAKE / SELL</span>
-                <span class="text-slate-200 font-bold tracking-wide">${maskTakeRate(getTakeRate(item))}</span>
-              </div>
+            ${isJualItem(item) ? `
+              <div class="text-slate-500 text-xs mb-4">Rate Take • Hubungi Admin untuk rate lengkap</div>
             ` : ''}
           </div>
           <div>
@@ -1261,17 +1260,17 @@
       const qty = Math.max(1, parseInt(document.getElementById('sell-qty').value) || 1);
       const sellerName = document.getElementById('sell-name').value.trim();
       const gameId = document.getElementById('sell-game-id').value.trim();
-      const world = document.getElementById('sell-world').value.trim();
       const note = document.getElementById('sell-note').value.trim();
       const orderId = makeOrderId();
-      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world, payment: 'SELL', status: 'SELL_WAITING_CONFIRMATION', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', seller_note: note, sell_proof_data: null };
+      // World Drop is intentionally controlled by Admin and is not entered by the seller.
+      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', status: 'SELL_WAITING_CONFIRMATION', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', seller_note: note, sell_proof_data: null };
       try {
         await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch(err) {
         showToast('Pengajuan gagal disimpan ke database.', true); console.error(err); return;
       }
       const orders=getOrders(); orders.unshift(order); saveOrders(orders); rememberBuyerOrderId(orderId); localStorage.setItem('taastore_last_order_id', orderId);
-      const text = `💰 *PENGAJUAN PENJUALAN TAASTORE*\n----------------------------------------\n• *Order ID*: ${orderId}\n• *Seller*: ${sellerName}\n• *Produk*: ${selectedItem.name}\n• *Jumlah*: ${qty}x\n• *GrowID / ID Game*: ${gameId}\n• *World Drop*: ${world}\n• *Catatan*: ${note || '-'}\n----------------------------------------\nMohon info *rate Take terbaru* dan instruksi drop untuk order ini. Saya akan menentukan lanjut atau batal setelah mengetahui detail rate.`;
+      const text = `💰 *PENGAJUAN PENJUALAN TAASTORE*\n----------------------------------------\n• *Order ID*: ${orderId}\n• *Seller*: ${sellerName}\n• *Produk*: ${selectedItem.name}\n• *Jumlah*: ${qty}x\n• *GrowID / ID Game*: ${gameId}\n• *Catatan*: ${note || '-'}\n----------------------------------------\nMohon info *rate Take terbaru*, total yang diterima, dan instruksi *World Drop* untuk order ini. Saya akan menentukan lanjut atau batal setelah mengetahui detail rate.`;
       window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
       closeSellModal(); showToast(`Pengajuan ${orderId} dibuat. Cek pesanan untuk Setujui atau Batalkan.`); await loadBuyerOrders(); if(isAdmin) await loadAdminOrders();
     }
