@@ -528,6 +528,11 @@
               <label class="text-xs text-slate-400 mb-1 block">Nama Pembeli</label>
               <input type="text" id="buyer-name" placeholder="Masukkan nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
             </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">Nomor WhatsApp</label>
+              <input type="tel" id="buyer-wa" inputmode="tel" placeholder="Contoh: 081234567890" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+              <p class="text-[10px] text-slate-500 mt-1">Nomor ini digunakan agar Admin dapat membalas langsung sesuai Order ID.</p>
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
@@ -579,6 +584,11 @@
             <div class="grid grid-cols-2 gap-3">
               <div><label class="text-xs text-slate-400 mb-1 block">Nama Seller</label><input id="sell-name" type="text" placeholder="Nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
               <div><label class="text-xs text-slate-400 mb-1 block">Jumlah BGL/DL</label><input id="sell-qty" type="number" min="1" value="1" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">Nomor WhatsApp</label>
+              <input id="sell-wa" type="tel" inputmode="tel" placeholder="Contoh: 081234567890" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm">
+              <p class="text-[10px] text-slate-500 mt-1">Digunakan untuk menghubungkan balasan Admin langsung ke order ini.</p>
             </div>
             <div>
               <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
@@ -1259,11 +1269,13 @@
       if (!selectedItem) return;
       const qty = Math.max(1, parseInt(document.getElementById('sell-qty').value) || 1);
       const sellerName = document.getElementById('sell-name').value.trim();
+      const whatsappNumber = normalizeWhatsAppNumber(document.getElementById('sell-wa').value.trim());
+      if (!whatsappNumber) { showToast('Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.', true); return; }
       const gameId = document.getElementById('sell-game-id').value.trim();
       const note = document.getElementById('sell-note').value.trim();
       const orderId = makeOrderId();
       // World Drop is intentionally controlled by Admin and is not entered by the seller.
-      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
+      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
       try {
         await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch(err) {
@@ -1337,6 +1349,24 @@
       for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
       return `TA-${code}`;
     }
+    function normalizeWhatsAppNumber(value) {
+      let digits = String(value || '').replace(/\D/g, '');
+      if (!digits) return '';
+      if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+      else if (digits.startsWith('8')) digits = '62' + digits;
+      if (!digits.startsWith('62')) return '';
+      return digits;
+    }
+    function getOrderWhatsApp(order) {
+      return normalizeWhatsAppNumber(order?.whatsapp_number || order?.wa_number || '');
+    }
+    function openWhatsAppTarget(order, text) {
+      const target = getOrderWhatsApp(order);
+      const url = target ? `https://wa.me/${target}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+      return !!target;
+    }
+
     async function sendToWA(e) {
       e.preventDefault();
       playCyberBeep(1100, 'square', 0.1);
@@ -1344,13 +1374,15 @@
       const qty = Math.max(1, parseInt(document.getElementById("cart-qty").value) || 1);
       const total = selectedItem.price * qty;
       const buyerName = document.getElementById("buyer-name").value.trim();
+      const whatsappNumber = normalizeWhatsAppNumber(document.getElementById("buyer-wa").value.trim());
+      if (!whatsappNumber) { showToast("Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.", true); return; }
       const gameId = document.getElementById("buyer-game-id").value.trim();
       const world = document.getElementById("buyer-world").value.trim();
       const payment = document.getElementById("buyer-payment").value;
       const orderId = makeOrderId();
       const order = {
         order_id: orderId, buyer_name: buyerName, product: selectedItem.name, qty, total,
-        grow_id: gameId, world, payment, status: "WAITING_PAYMENT", created_at: new Date().toISOString(), paid_at: null, completed_at: null
+        grow_id: gameId, world, payment, whatsapp_number: whatsappNumber, status: "WAITING_PAYMENT", created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: "BUY"
       };
       try {
         await supabaseRequest("orders", {
@@ -1418,8 +1450,68 @@
       if (!order) { showToast('Detail order tidak ditemukan di perangkat admin.', true); return; }
       const text = buildAdminWhatsAppText(order, kind);
       if (!text) return;
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+      const targeted = openWhatsAppTarget(order, text);
+      if (!targeted) showToast('Nomor WhatsApp order belum tersedia; WhatsApp dibuka tanpa target.', true);
     }
+    window.taastoreSellProofCache = window.taastoreSellProofCache || {};
+    function openSellProof(orderId) {
+      if (!isAdmin) return;
+      const id = String(orderId || '');
+      const order = getOrders().find(o => String(o.order_id) === id);
+      const data = window.taastoreSellProofCache[id] || order?.sell_proof_data;
+      if (!data || typeof data !== 'string' || !data.startsWith('data:image/')) {
+        showToast('Bukti drop tidak tersedia atau format gambar tidak valid.', true);
+        return;
+      }
+      const modal = document.getElementById('sell-proof-modal');
+      const image = document.getElementById('sell-proof-image');
+      const label = document.getElementById('sell-proof-order-id');
+      if (!modal || !image) return;
+      label.textContent = id;
+      image.onload = () => modal.classList.remove('hidden');
+      image.onerror = () => { image.removeAttribute('src'); showToast('Gambar bukti tidak dapat ditampilkan.', true); };
+      image.src = data;
+    }
+    function closeSellProof() {
+      const modal = document.getElementById('sell-proof-modal');
+      const image = document.getElementById('sell-proof-image');
+      if (modal) modal.classList.add('hidden');
+      if (image) { image.onload = null; image.onerror = null; image.removeAttribute('src'); }
+    }
+
+    function adminOrderIsHistory(o) {
+      const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
+      if (isSell) return o.sell_status === 'SELL_CANCELLED' || o.sell_status === 'SELL_COMPLETED' || o.status === 'COMPLETED';
+      return o.status === 'COMPLETED';
+    }
+    function adminOrderCard(o) {
+      const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
+      const statusText = isSell ? sellStatusLabel(o) : (o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU');
+      const statusClass = statusText === 'SELESAI' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : statusText === 'DIBATALKAN' ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
+      let buttons = '';
+      if (isSell) {
+        if (statusText === 'MENUNGGU KONFIRMASI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','rate')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💬 Konfirmasi Rate</button>`;
+        if (statusText === 'MENUNGGU DROP') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💳 Tanya Payment</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','drop')" class="text-[10px] px-2.5 py-2 rounded-lg bg-cyan-600/80 text-white font-bold">📦 Instruksi Drop</button>`;
+        if (o.sell_proof_data) buttons += `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📷 Lihat Bukti</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','received')" class="text-[10px] px-2.5 py-2 rounded-lg border border-blue-500/30 text-blue-300">💬 Drop Diterima</button>`;
+        if (statusText !== 'DIBATALKAN' && statusText !== 'SELESAI') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai / Bayar</button>`;
+        if (statusText === 'SELESAI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+      } else {
+        if (o.status !== 'COMPLETED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💳 Kirim Pembayaran</button><button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai</button>`;
+        else buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+      }
+      const wa = getOrderWhatsApp(o);
+      const customerLabel = isSell ? (o.buyer_name || '-') : (o.buyer_name || '-');
+      return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold text-slate-500 font-mono">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
+          <p class="text-xs text-slate-200 mt-1 font-semibold">${escapeReviewText(o.product)} · ${Number(o.qty)||0}x ${isSell ? '' : `· Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
+          <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(customerLabel)} · GrowID: ${escapeReviewText(o.grow_id || '-')} · ${wa ? 'WA terhubung' : 'WA belum tersimpan'}</p>
+          ${isSell && o.sell_proof_data ? `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-cyan-300 underline mt-1">Lihat Bukti Drop</button>` : ''}
+        </div>
+        <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}</div>
+      </div>`;
+    }
+
     async function loadAdminOrders() {
       const panel = document.getElementById("admin-orders-panel");
       const list = document.getElementById("admin-orders-list");
@@ -1432,31 +1524,12 @@
         list.innerHTML = '<p class="text-xs text-slate-500 py-4">Belum ada pesanan tersimpan.</p>'; return;
       }
       const local = getOrders();
-      orders.forEach(o => { const i = local.findIndex(x => x.order_id === o.order_id); if (i >= 0) local[i] = {...local[i], ...o}; else local.unshift(o); });
+      orders.forEach(o => { const i = local.findIndex(x => x.order_id === o.order_id); if (i >= 0) local[i] = {...local[i], ...o}; else local.unshift(o); if (o.sell_proof_data) window.taastoreSellProofCache[String(o.order_id)] = o.sell_proof_data; });
       saveOrders(local);
-      list.innerHTML = orders.map((o) => {
-        const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
-        const statusText = isSell ? sellStatusLabel(o) : (o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU');
-        const statusClass = statusText === 'SELESAI' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : statusText === 'DIBATALKAN' ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
-        let buttons = '';
-        if (isSell) {
-          if (statusText === 'MENUNGGU KONFIRMASI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','rate')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💬 Konfirmasi Rate</button>`;
-          if (statusText === 'MENUNGGU DROP') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💳 Tanya Payment</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','drop')" class="text-[10px] px-2.5 py-2 rounded-lg bg-cyan-600/80 text-white font-bold">📦 Instruksi Drop</button>`;
-          if (o.sell_proof_data) buttons += `<a href="${o.sell_proof_data}" target="_blank" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📷 Bukti</a><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','received')" class="text-[10px] px-2.5 py-2 rounded-lg border border-blue-500/30 text-blue-300">💬 Drop Diterima</button>`;
-          if (statusText !== 'DIBATALKAN' && statusText !== 'SELESAI') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai / Bayar</button>`;
-          if (statusText === 'SELESAI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
-        } else {
-          if (o.status !== 'COMPLETED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💳 Kirim Pembayaran</button><button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai</button>`;
-          else buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
-        }
-        return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
-          <p class="text-xs text-slate-300 mt-1">${escapeReviewText(o.buyer_name)} · ${escapeReviewText(o.product)} · ${o.qty}x · ${isSell ? 'Penjualan ke TAASTORE' : `Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
-          <p class="text-[10px] text-slate-500 mt-1">GrowID: ${escapeReviewText(o.grow_id)} · ${isSell ? 'Payment: akan dikonfirmasi' : `World: ${escapeReviewText(o.world)} · ${escapeReviewText(o.payment)}`}</p>
-          ${isSell && o.sell_proof_data ? `<a href="${o.sell_proof_data}" target="_blank" class="text-[10px] text-cyan-300 underline">Lihat Bukti Drop</a>` : ''}</div>
-          <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}</div>
-        </div>`;
-      }).join('');
+      const active = orders.filter(o => !adminOrderIsHistory(o));
+      const history = orders.filter(adminOrderIsHistory);
+      list.innerHTML = `${active.length ? `<div class="space-y-3">${active.map(adminOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada order aktif.</p>'}
+        ${history.length ? `<details class="mt-5 rounded-xl border border-slate-800 bg-slate-950/30"><summary class="cursor-pointer select-none px-3 py-2.5 text-xs font-bold text-slate-400">📁 Riwayat (${history.length})</summary><div class="p-3 pt-0 space-y-3">${history.map(adminOrderCard).join('')}</div></details>` : ''}`;
     }
     async function completeOrder(orderId) {
       if (!isAdmin || !orderId) return;
@@ -1568,6 +1641,17 @@
   </script>
 
   <!-- FITUR 1 & FITUR 2: CYBER-AUDIO REACTIVE VISUALIZER, LO-FI CHILL BGM & OVERDRIVE PANIC SIREN ENGINE -->
+  <!-- SELL proof preview modal -->
+  <div id="sell-proof-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[80]" onclick="if(event.target===this) closeSellProof()">
+    <div class="relative w-full max-w-4xl max-h-[92vh] rounded-2xl border border-cyan-500/30 bg-slate-950/95 shadow-2xl p-3 sm:p-4">
+      <button type="button" onclick="closeSellProof()" class="absolute right-3 top-3 z-10 w-9 h-9 rounded-full bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white" aria-label="Tutup">✕</button>
+      <div class="text-xs font-black uppercase tracking-wider text-cyan-300 px-2 pb-3">📷 Bukti Drop — <span id="sell-proof-order-id"></span></div>
+      <div class="rounded-xl border border-slate-800 bg-slate-900/50 overflow-auto max-h-[78vh] flex items-center justify-center p-2">
+        <img id="sell-proof-image" src="" alt="Bukti drop seller" class="max-w-full max-h-[74vh] object-contain rounded-lg" />
+      </div>
+    </div>
+  </div>
+
   <script>
     let isBgmPlaying = false;
     let bgmOscillator = null;
