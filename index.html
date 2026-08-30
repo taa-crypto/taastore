@@ -636,6 +636,15 @@
 
   <script>
     const API_URL = "https://taastore-backend.vercel.app";
+    const SUPABASE_URL = "https://deqzgidcjpvrlxhtkruq.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_7XH0-4RhMH_YbkMny-ngFQ_wLIExKR6";
+    const SUPABASE_REST = `${SUPABASE_URL}/rest/v1`;
+    const supabaseHeaders = () => ({
+      "apikey": SUPABASE_PUBLISHABLE_KEY,
+      "Authorization": `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation"
+    });
     let isAdmin = false;
     let adminKey = "";
     let itemsData = [];
@@ -885,10 +894,32 @@
       return `<span class="inline-flex items-center gap-0.5 text-amber-400" aria-label="${safeCount} dari 5 bintang">${star.repeat(safeCount)}</span>`;
     }
 
-    function loadReviews() {
+    async function supabaseRequest(path, options = {}) {
+      const response = await fetch(`${SUPABASE_REST}/${path}`, {
+        ...options,
+        headers: { ...supabaseHeaders(), ...(options.headers || {}) }
+      });
+      const text = await response.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
+      if (!response.ok) {
+        const msg = data?.message || data?.hint || data?.details || `HTTP ${response.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    async function loadReviews() {
       const container = document.getElementById("review-list");
-      const stored = localStorage.getItem("taastore_reviews");
-      const reviews = stored ? JSON.parse(stored) : defaultReviews;
+      let reviews = [];
+      try {
+        reviews = await supabaseRequest("reviews?select=*&order=created_at.desc");
+      } catch (err) {
+        console.warn("Supabase reviews gagal, memakai cache lokal:", err);
+        const stored = localStorage.getItem("taastore_reviews");
+        reviews = stored ? JSON.parse(stored) : defaultReviews;
+      }
+      if (!Array.isArray(reviews)) reviews = [];
       container.innerHTML = "";
       if (reviews.length === 0) {
         container.innerHTML = `
@@ -898,11 +929,10 @@
             </div>
             <p class="text-slate-300 font-semibold text-sm">Belum Ada Ulasan Pelanggan</p>
             <p class="text-slate-500 text-xs mt-1">Jadilah pembeli pertama di TAASTORE dan bagikan pengalaman transaksimu di sini!</p>
-          </div>
-        `;
+          </div>`;
         return;
       }
-      reviews.forEach(rev => {
+      reviews.forEach((rev, index) => {
         const displayName = rev.anonymous === false ? maskGrowID(rev.name) : "Anonymous";
         const card = document.createElement("div");
         card.className = "bg-slate-900/60 backdrop-blur-md p-4 rounded-2xl border border-slate-800/80 flex flex-col justify-between";
@@ -919,17 +949,27 @@
             <p class="text-xs text-slate-400 italic">"${escapeReviewText(rev.comment)}"</p>
           </div>
           <div class="text-[10px] text-slate-600 mt-3 flex items-center justify-between gap-2">
-            <span>${escapeReviewText(rev.date)}</span>
-            ${isAdmin ? `<button type="button" onclick="deleteReview(${reviews.indexOf(rev)})" class="text-[10px] px-2 py-1 rounded-md border border-rose-500/30 text-rose-300 hover:bg-rose-500/10">Hapus</button>` : ``}
-          </div>
-        `;
+            <span>${escapeReviewText(rev.date || "Baru saja")}</span>
+            ${isAdmin ? `<button type="button" onclick="deleteReview('${escapeReviewText(rev.order_id || '')}')" class="text-[10px] px-2 py-1 rounded-md border border-rose-500/30 text-rose-300 hover:bg-rose-500/10">Hapus</button>` : ``}
+          </div>`;
         container.appendChild(card);
       });
     }
-    function openReviewModal() {
+
+    async function getOrderById(orderId) {
+      if (!orderId) return null;
+      try {
+        const rows = await supabaseRequest(`orders?select=*&order_id=eq.${encodeURIComponent(orderId)}&limit=1`);
+        return Array.isArray(rows) && rows[0] ? rows[0] : null;
+      } catch (err) {
+        return getOrders().find(o => String(o.order_id).toUpperCase() === String(orderId).toUpperCase()) || null;
+      }
+    }
+
+    async function openReviewModal() {
       playCyberBeep(700, 'sine', 0.05);
       const lastOrderId = (localStorage.getItem("taastore_last_order_id") || "").toUpperCase();
-      const order = getOrders().find(o => String(o.order_id).toUpperCase() === lastOrderId);
+      const order = await getOrderById(lastOrderId);
       const info = document.getElementById("review-order-info");
       if (!order) {
         if (info) info.textContent = "Belum ada pesanan dari perangkat ini. Review tersedia setelah order selesai.";
@@ -938,7 +978,7 @@
       }
       if (order.status !== "COMPLETED") {
         if (info) info.textContent = `Order ${order.order_id} masih diproses. Review terbuka setelah Admin menandai selesai.`;
-        showToast("Review terbuka setelah order ditandai selesai oleh Admin.", true);
+        showToast("Review terbuka setelah Admin menandai order selesai.", true);
         return;
       }
       if (info) info.textContent = `Order ${order.order_id} · ${order.product} · ✓ Verified Purchase`;
@@ -957,10 +997,7 @@
       if (label) label.textContent = `${value} bintang`;
       document.querySelectorAll("#review-rating-stars .review-star").forEach(btn => {
         const r = Number(btn.dataset.rating);
-        if (r < 3) {
-          btn.classList.remove("is-on", "is-off");
-          return;
-        }
+        if (r < 3) { btn.classList.remove("is-on", "is-off"); return; }
         btn.classList.toggle("is-on", r <= value);
         btn.classList.toggle("is-off", r > value);
         btn.setAttribute("aria-checked", r === value ? "true" : "false");
@@ -971,7 +1008,7 @@
     });
     setReviewRating(5);
 
-    function submitReview(e) {
+    async function submitReview(e) {
       e.preventDefault();
       playCyberBeep(1200, 'sine', 0.08);
       const name = document.getElementById("review-name").value.trim();
@@ -980,52 +1017,57 @@
       const rating = parseInt(document.getElementById("review-rating").value, 10);
       const comment = document.getElementById("review-comment").value.trim();
       if (!name || !comment || !orderId) return;
-      const order = getOrders().find(o => String(o.order_id).toUpperCase() === orderId);
+      const order = await getOrderById(orderId);
       if (!order || order.status !== "COMPLETED") {
         showToast("Order belum ditemukan atau belum ditandai selesai oleh Admin.", true);
         return;
       }
       if (![3,4,5].includes(rating)) {
-        showToast("Rating hanya boleh 3, 4, atau 5 bintang.");
+        showToast("Rating hanya boleh 3, 4, atau 5 bintang.", true);
         setReviewRating(5);
         return;
       }
-      const stored = localStorage.getItem("taastore_reviews");
-      const reviews = stored ? JSON.parse(stored) : [];
-      reviews.unshift({
-        name,
-        anonymous,
-        rating,
-        comment,
-        order_id: orderId,
-        verified: true,
-        date: "Baru saja"
-      });
-      localStorage.setItem("taastore_reviews", JSON.stringify(reviews));
-      loadReviews();
+      try {
+        await supabaseRequest("reviews", {
+          method: "POST",
+          body: JSON.stringify({
+            order_id: order.order_id,
+            name,
+            rating,
+            comment,
+            verified: true,
+            published: true
+          })
+        });
+      } catch (err) {
+        showToast("Gagal menyimpan testimoni ke database. Coba lagi.", true);
+        console.error(err);
+        return;
+      }
       closeReviewModal();
       showToast("Terima kasih atas ulasannya!");
       document.getElementById("review-name").value = "";
-      const reviewInfo = document.getElementById("review-order-info");
-      if (reviewInfo) reviewInfo.textContent = "Order selesai akan dipilih otomatis dari pesanan terakhir kamu.";
       document.getElementById("review-comment").value = "";
       document.getElementById("review-anonymous").checked = true;
       setReviewRating(5);
+      await loadReviews();
     }
-    function deleteReview(index) {
-      if (!isAdmin) return;
-      const stored = localStorage.getItem("taastore_reviews");
-      if (!stored) return;
-      let reviews;
-      try { reviews = JSON.parse(stored); } catch (e) { return; }
-      if (!Array.isArray(reviews) || index < 0 || index >= reviews.length) return;
+
+    async function deleteReview(orderId) {
+      if (!isAdmin || !orderId) return;
       if (!confirm("Hapus testimoni ini?")) return;
-      reviews.splice(index, 1);
-      localStorage.setItem("taastore_reviews", JSON.stringify(reviews));
-      loadReviews();
-      showToast("Testimoni berhasil dihapus.");
+      try {
+        await supabaseRequest(`reviews?order_id=eq.${encodeURIComponent(orderId)}`, { method: "DELETE" });
+        await loadReviews();
+        showToast("Testimoni berhasil dihapus.");
+      } catch (err) {
+        showToast("Testimoni gagal dihapus dari database.", true);
+        console.error(err);
+      }
     }
+
     function openCartModal(id) {
+
       playCyberBeep(900, 'sine', 0.06);
       selectedItem = itemsData.find(i => i.id === id);
       if (!selectedItem) return;
@@ -1053,16 +1095,14 @@
         return Array.isArray(parsed) ? parsed : [];
       } catch (e) { return []; }
     }
-    function saveOrders(orders) {
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-    }
+    function saveOrders(orders) { try { localStorage.setItem(ORDERS_KEY, JSON.stringify(orders)); } catch (_) {} }
     function makeOrderId() {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
       let code = "";
       for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
       return `TA-${code}`;
     }
-    function sendToWA(e) {
+    async function sendToWA(e) {
       e.preventDefault();
       playCyberBeep(1100, 'square', 0.1);
       if (!selectedItem) return;
@@ -1074,73 +1114,51 @@
       const payment = document.getElementById("buyer-payment").value;
       const orderId = makeOrderId();
       const order = {
-        order_id: orderId,
-        buyer_name: buyerName,
-        product: selectedItem.name,
-        qty,
-        total,
-        grow_id: gameId,
-        world,
-        payment,
-        status: "WAITING_ADMIN",
-        created_at: new Date().toISOString(),
-        completed_at: null
+        order_id: orderId, buyer_name: buyerName, product: selectedItem.name, qty, total,
+        grow_id: gameId, world, payment, status: "WAITING_PAYMENT", created_at: new Date().toISOString(), paid_at: null, completed_at: null
       };
-      const orders = getOrders();
-      orders.unshift(order);
-      saveOrders(orders);
+      try {
+        await supabaseRequest("orders", { method: "POST", body: JSON.stringify(order) });
+      } catch (err) {
+        showToast("Order gagal disimpan ke database. Coba lagi.", true);
+        console.error(err);
+        return;
+      }
+      const orders = getOrders(); orders.unshift(order); saveOrders(orders);
       localStorage.setItem("taastore_last_order_id", orderId);
       const textMessage =
-`🛒 *FORM PESANAN TAASTORE*
-----------------------------------------
-• *Order ID*: ${orderId}
-• *Nama Pembeli*: ${buyerName}
-• *Produk*: ${selectedItem.name}
-• *Jumlah*: ${qty}x
-• *Total Harga*: Rp ${total.toLocaleString('id-ID')}
-• *GrowID / ID Game*: ${gameId}
-• *World Name*: ${world}
-• *Metode Bayar*: ${payment}
-----------------------------------------
-Mohon diproses min, terima kasih! 🙏`;
-      const waText = encodeURIComponent(textMessage);
-      window.open(`https://wa.me/6282123602358?text=${waText}`, '_blank');
+`🛒 *FORM PESANAN TAASTORE*\n----------------------------------------\n• *Order ID*: ${orderId}\n• *Nama Pembeli*: ${buyerName}\n• *Produk*: ${selectedItem.name}\n• *Jumlah*: ${qty}x\n• *Total Harga*: Rp ${total.toLocaleString('id-ID')}\n• *GrowID / ID Game*: ${gameId}\n• *World Name*: ${world}\n• *Metode Bayar*: ${payment}\n----------------------------------------\nMohon diproses min, terima kasih! 🙏`;
+      window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(textMessage)}`, '_blank');
       closeCartModal();
       showToast(`Order ${orderId} dibuat. Order ID tersimpan otomatis.`);
-      if (isAdmin) loadAdminOrders();
+      if (isAdmin) await loadAdminOrders();
     }
-    function loadAdminOrders() {
+    async function loadAdminOrders() {
       const panel = document.getElementById("admin-orders-panel");
       const list = document.getElementById("admin-orders-list");
       if (!panel || !list || !isAdmin) return;
       panel.classList.remove("hidden");
-      const orders = getOrders();
-      if (!orders.length) {
-        list.innerHTML = '<p class="text-xs text-slate-500 py-4">Belum ada pesanan tersimpan.</p>';
-        return;
+      let orders = [];
+      try { orders = await supabaseRequest("orders?select=*&order=created_at.desc"); }
+      catch (err) { orders = getOrders(); console.warn(err); }
+      if (!Array.isArray(orders) || !orders.length) {
+        list.innerHTML = '<p class="text-xs text-slate-500 py-4">Belum ada pesanan tersimpan.</p>'; return;
       }
       list.innerHTML = orders.map((o, i) => `
         <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="font-bold text-amber-400 text-sm">${escapeReviewText(o.order_id)}</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-md border ${o.status === 'COMPLETED' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : 'border-amber-700/50 text-amber-300 bg-amber-950/30'}">${o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU'}</span>
-            </div>
-            <p class="text-xs text-slate-300 mt-1">${escapeReviewText(o.buyer_name)} · ${escapeReviewText(o.product)} · ${o.qty}x · Rp ${Number(o.total).toLocaleString('id-ID')}</p>
-            <p class="text-[10px] text-slate-500 mt-1">GrowID: ${escapeReviewText(o.grow_id)} · World: ${escapeReviewText(o.world)} · ${escapeReviewText(o.payment)}</p>
-          </div>
-          ${o.status === 'COMPLETED' ? '<span class="text-[10px] text-emerald-400 font-semibold">✓ Customer dapat review</span>' : `<button type="button" onclick="completeOrder(${i})" class="text-xs px-3 py-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold border border-emerald-500/30">Tandai Order Selesai</button>`}
+          <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${o.status === 'COMPLETED' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : 'border-amber-700/50 text-amber-300 bg-amber-950/30'}">${o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU'}</span></div>
+          <p class="text-xs text-slate-300 mt-1">${escapeReviewText(o.buyer_name)} · ${escapeReviewText(o.product)} · ${o.qty}x · Rp ${Number(o.total).toLocaleString('id-ID')}</p>
+          <p class="text-[10px] text-slate-500 mt-1">GrowID: ${escapeReviewText(o.grow_id)} · World: ${escapeReviewText(o.world)} · ${escapeReviewText(o.payment)}</p></div>
+          ${o.status === 'COMPLETED' ? '<span class="text-[10px] text-emerald-400 font-semibold">✓ Customer dapat review</span>' : `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold border border-emerald-500/30">Tandai Order Selesai</button>`}
         </div>`).join('');
     }
-    function completeOrder(index) {
-      if (!isAdmin) return;
-      const orders = getOrders();
-      if (!orders[index]) return;
-      orders[index].status = "COMPLETED";
-      orders[index].completed_at = new Date().toISOString();
-      saveOrders(orders);
-      loadAdminOrders();
-      showToast(`Order ${orders[index].order_id} ditandai selesai.`);
+    async function completeOrder(orderId) {
+      if (!isAdmin || !orderId) return;
+      try {
+        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: "PATCH", body: JSON.stringify({ status: "COMPLETED", completed_at: new Date().toISOString() }) });
+        const local = getOrders(); const idx = local.findIndex(o => o.order_id === orderId); if (idx >= 0) { local[idx].status = "COMPLETED"; local[idx].completed_at = new Date().toISOString(); saveOrders(local); }
+        await loadAdminOrders(); showToast(`Order ${orderId} ditandai selesai.`);
+      } catch (err) { showToast("Gagal menandai order selesai.", true); console.error(err); }
     }
 
     function toggleAdminPanel() {
