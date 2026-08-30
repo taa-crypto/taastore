@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TAASTORE — Payment & Review Prototype</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:#090b10;color:#eef2f7}
+.wrap{max-width:1050px;margin:auto;padding:28px 18px 60px}
+h1{margin:0 0 6px;font-size:28px}.sub{color:#9da7b5;margin-bottom:24px}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+.card{background:#11151d;border:1px solid #252c38;border-radius:16px;padding:20px;box-shadow:0 10px 30px #0005}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between}.product{font-size:22px;font-weight:800}
+.price{font-size:18px;margin:8px 0 18px}
+label{display:block;font-size:13px;color:#aeb8c7;margin:12px 0 6px}
+input,textarea,select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #303846;background:#0b0e14;color:#fff;outline:none}
+textarea{min-height:90px;resize:vertical}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:#e9eef5;color:#0a0d12}
+button.alt{background:#1c2430;color:#e9eef5;border:1px solid #303846}.buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:#182331;border:1px solid #2b4058;color:#b9d8ff;font-size:12px;font-weight:800}
+.status{margin:14px 0;padding:12px;border-radius:10px;background:#0b0f16;border:1px solid #242d39}
+.steps{display:grid;gap:8px;margin-top:12px}.step{padding:9px 11px;border-left:3px solid #394454;color:#8f9aaa}.step.on{border-left-color:#dce6f2;color:#f4f7fb}
+.review{border-top:1px solid #272f3b;margin-top:14px;padding-top:14px}.stars{font-size:20px;letter-spacing:2px}
+.hidden{display:none!important}.muted{color:#8e99a8;font-size:13px}.order{font-family:ui-monospace,monospace;color:#c7d8ed}
+.list{display:grid;gap:12px;margin-top:14px}.reviewitem{padding:14px;border-radius:12px;background:#0c1017;border:1px solid #242d39}
+small{color:#8d98a7}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>TAASTORE — Prototype</h1>
+<div class="sub">Demo lengkap: checkout otomatis, order WhatsApp manual, completion, dan Verified Purchase.</div>
+
+<div class="grid">
+<section class="card">
+  <div class="row"><div><div class="product">1 BGL</div><div class="price">Rp25.000</div></div><span class="badge">PROTOTYPE</span></div>
+  <label>GrowID</label><input id="growid" placeholder="Contoh: ABC123">
+  <div class="buttons">
+    <button onclick="autoOrder()">CHECKOUT OTOMATIS</button>
+    <button class="alt" onclick="waOrder()">ORDER VIA WHATSAPP</button>
+  </div>
+  <div id="orderBox" class="status hidden"></div>
+  <div id="adminBox" class="card hidden" style="padding:15px;margin-top:14px;background:#0c1017">
+    <b>ADMIN TAASTORE</b>
+    <div class="muted" style="margin-top:5px">Demo saja — di produksi bagian ini berada di halaman admin.</div>
+    <div id="adminButtons" class="buttons"></div>
+  </div>
+  <div id="reviewForm" class="review hidden">
+    <b>Tulis Testimoni</b>
+    <label>Rating</label>
+    <select id="rating"><option value="5">★★★★★</option><option value="4">★★★★☆</option><option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option></select>
+    <label>Pengalaman</label><textarea id="message" placeholder="Ceritakan pengalaman kamu..."></textarea>
+    <label><input id="anon" type="checkbox" checked style="width:auto;margin-right:7px"> Tampilkan sebagai anonim</label>
+    <div class="buttons"><button onclick="submitReview()">KIRIM REVIEW</button></div>
+    <div class="muted" style="margin-top:8px">GrowID publik otomatis dimasking jika kamu memilih menampilkan nama.</div>
+  </div>
+</section>
+
+<section class="card">
+  <b>ALUR ORDER</b>
+  <div class="steps">
+    <div id="s1" class="step">1. Order dibuat</div>
+    <div id="s2" class="step">2. Pembayaran terkonfirmasi</div>
+    <div id="s3" class="step">3. Order completed</div>
+    <div id="s4" class="step">4. Review verified</div>
+  </div>
+  <div style="margin-top:22px"><b>Testimoni</b><div id="reviews" class="list">
+    <div class="reviewitem"><b>Anonymous</b> <span class="badge">✓ Verified Purchase</span><div class="stars">★★★★★</div><div class="muted">Contoh review dummy — transaksi sudah selesai.</div></div>
+  </div></div>
+</section>
+</div>
+</div>
+
+<script>
+let order=null;
+const $=id=>document.getElementById(id);
+function id(){return "TA-"+Math.random().toString(36).slice(2,8).toUpperCase();}
+function reset(){["s1","s2","s3","s4"].forEach(x=>$(x).classList.remove("on"));$("reviewForm").classList.add("hidden");}
+function showOrder(method){
+ reset(); order={id:id(),growid:$("growid").value.trim()||"DEMO123",method,status:method==="WHATSAPP"?"PROCESSING":"PENDING",reviewed:false};
+ $("s1").classList.add("on");
+ $("orderBox").classList.remove("hidden");
+ render();
+ $("adminBox").classList.remove("hidden");
+ renderAdmin();
+}
+function autoOrder(){showOrder("AUTOMATIC");}
+function waOrder(){
+ showOrder("WHATSAPP");
+ const text=encodeURIComponent("Halo TAASTORE, saya ingin order BGL x1. Order ID: "+order.id+" | GrowID: "+order.growid);
+ window.open("https://wa.me/?text="+text,"_blank");
+}
+function render(){
+ $("orderBox").innerHTML="<b>Order <span class='order'>"+order.id+"</span></b><br>Metode: "+order.method+"<br>Status: <strong>"+order.status+"</strong>";
+ if(order.status==="PAID")$("s2").classList.add("on");
+ if(order.status==="COMPLETED"){$("s2").classList.add("on");$("s3").classList.add("on");$("reviewForm").classList.remove("hidden")}
+ if(order.reviewed){$("s4").classList.add("on");$("reviewForm").classList.add("hidden")}
+}
+function renderAdmin(){
+ let b=$("adminButtons"); b.innerHTML="";
+ if(order.method==="AUTOMATIC"&&order.status==="PENDING"){
+   b.innerHTML="<button onclick='webhookPaid()'>SIMULASIKAN PAYMENT WEBHOOK → PAID</button>";
+ } else if(order.status==="PROCESSING"||order.status==="PAID"){
+   b.innerHTML="<button onclick='complete()'>✓ SELESAIKAN ORDER</button>";
+ } else if(order.reviewed) b.innerHTML="<span class='badge'>Review sudah dikirim</span>";
+ else b.innerHTML="<span class='muted'>Order menunggu tindakan.</span>";
+}
+function webhookPaid(){order.status="PAID";render();renderAdmin();}
+function complete(){order.status="COMPLETED";render();renderAdmin();}
+function mask(s){
+ if(s.length<=3)return "***";
+ if(s.length<=6)return s[0]+"***"+s.slice(-1);
+ return s[0]+"***"+s.slice(-3);
+}
+function submitReview(){
+ if(!order||order.status!=="COMPLETED"||order.reviewed)return;
+ let name=$("anon").checked?"Anonymous":mask(order.growid);
+ let rating="★★★★★".slice(0,Number($("rating").value))+"☆☆☆☆☆".slice(0,5-Number($("rating").value));
+ let msg=$("message").value.trim()||"Transaksi berjalan lancar.";
+ let el=document.createElement("div");el.className="reviewitem";
+ el.innerHTML="<b>"+name+"</b> <span class='badge'>✓ Verified Purchase</span><div class='stars'>"+rating+"</div><div style='margin-top:5px'>"+escapeHtml(msg)+"</div>";
+ $("reviews").prepend(el); order.reviewed=true; render();renderAdmin();
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+</script>
+</body>
+</html>
