@@ -434,7 +434,7 @@
         <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3 gap-3">
           <div>
             <h3 class="font-black text-white">Pesanan Saya</h3>
-            <p class="text-xs text-slate-500 mt-1">Lihat status pesanan dari perangkat ini. Review aktif otomatis setelah order selesai.</p>
+            <p class="text-xs text-slate-500 mt-1">Order aktif ditampilkan di sini. Pesanan selesai/batal masuk ke Riwayat dan dibersihkan otomatis setelah 30 hari.</p>
           </div>
           <button type="button" onclick="loadBuyerOrders()" class="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Refresh</button>
         </div>
@@ -1111,13 +1111,13 @@
         list.innerHTML = '<p class="text-xs text-slate-500 py-3">Pesanan belum ditemukan di database.</p>';
         return;
       }
-      list.innerHTML = valid.map(({order}) => {
+      const renderBuyerOrderCard = ({order}) => {
         const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
-        const done = order.status === 'COMPLETED';
+        const done = order.status === 'COMPLETED' || (isSell && order.sell_status === 'SELL_COMPLETED');
         const sellStatus = order.sell_status || order.status;
         const cancelled = isSell && sellStatus === 'SELL_CANCELLED';
         const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : cancelled ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
-        const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN'};
+        const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN',SELL_COMPLETED:'SELESAI'};
         const statusText = done ? 'SELESAI' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : 'MENUNGGU');
         let reviewBtn = done ? `<button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan order.</span>';
         if (isSell && sellStatus === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
@@ -1130,7 +1130,18 @@
           </div>
           <div class="shrink-0">${reviewBtn}</div>
         </div>`;
-      }).join('');
+      };
+      const active = valid.filter(({order}) => {
+        const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
+        return !(order.status === 'COMPLETED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status)));
+      });
+      const history = valid.filter(({order}) => {
+        const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
+        return order.status === 'COMPLETED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status));
+      });
+      list.innerHTML = `
+        ${active.length ? `<div class="space-y-3">${active.map(renderBuyerOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada pesanan aktif saat ini.</p>'}
+        ${history.length ? `<details class="mt-5 rounded-xl border border-slate-800 bg-slate-950/30"><summary class="cursor-pointer select-none px-3 py-2.5 text-xs font-bold text-slate-400">📁 Riwayat Pesanan (${history.length})</summary><div class="p-3 pt-0 space-y-3">${history.map(renderBuyerOrderCard).join('')}</div></details>` : ''}`;
     }
 
     async function openReviewForOrder(orderId) {
