@@ -729,49 +729,108 @@
         toast.className = toast.className.replace("block", "hidden");
       }, 3000);
     }
-    // Favorite/Love is intentionally local to this browser for the prototype.
-    // It survives re-render, refresh, and closing/re-opening the site.
-    const FAVORITES_KEY = "taastore_favorites_v1";
+    // Favorite/Love: global counter in Supabase + per-device state in localStorage.
+    // Each device gets a stable anonymous visitor id so one device cannot add the same product repeatedly.
+    const FAVORITES_KEY = "taastore_favorites_v2";
+    const FAVORITE_VISITOR_KEY = "taastore_favorite_visitor_v1";
+    let favoriteRowsCache = [];
+
     function getFavorites() {
       try {
         const raw = localStorage.getItem(FAVORITES_KEY);
         const parsed = raw ? JSON.parse(raw) : {};
         return parsed && typeof parsed === "object" ? parsed : {};
-      } catch (e) {
-        return {};
-      }
+      } catch (e) { return {}; }
     }
     function saveFavorites(favorites) {
       try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites)); } catch (e) {}
     }
+    function getFavoriteVisitorId() {
+      try {
+        let id = localStorage.getItem(FAVORITE_VISITOR_KEY);
+        if (!id) {
+          id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ("v-" + Date.now() + "-" + Math.random().toString(36).slice(2));
+          localStorage.setItem(FAVORITE_VISITOR_KEY, id);
+        }
+        return id;
+      } catch (e) {
+        return "v-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      }
+    }
     function favoriteKey(item) {
       return String(item?.order_id ?? item?.name ?? item?.id ?? "");
     }
-    function applyFavoriteState(btn, liked) {
+    async function loadFavoriteRows() {
+      try {
+        const res = await fetch(`${SUPABASE_REST}/product_favorites?select=product_key,visitor_id`, {
+          headers: supabaseHeaders()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        favoriteRowsCache = await res.json();
+        const mine = {};
+        favoriteRowsCache.forEach(r => {
+          if (r.visitor_id === getFavoriteVisitorId()) mine[String(r.product_key)] = true;
+        });
+        saveFavorites(mine);
+        return favoriteRowsCache;
+      } catch (e) {
+        console.warn("Favorite Supabase load failed", e);
+        return favoriteRowsCache;
+      }
+    }
+    function favoriteCount(productKey) {
+      const key = String(productKey);
+      return favoriteRowsCache.filter(r => String(r.product_key) === key).length;
+    }
+    function applyFavoriteState(btn, liked, count = 0) {
       const countEl = btn.querySelector('.like-count');
       if (liked) {
         btn.classList.add('liked', 'text-rose-500');
         btn.classList.remove('text-slate-400');
-        if (countEl) countEl.innerText = '1';
+        if (countEl) countEl.innerText = String(count);
         btn.setAttribute('aria-pressed', 'true');
       } else {
         btn.classList.remove('liked', 'text-rose-500');
         btn.classList.add('text-slate-400');
-        if (countEl) countEl.innerText = '0';
+        if (countEl) countEl.innerText = String(count);
         btn.setAttribute('aria-pressed', 'false');
       }
     }
-    function toggleLike(btn, productKey) {
+    async function toggleLike(btn, productKey) {
       playCyberBeep(1000, 'sine', 0.06);
-      const favorites = getFavorites();
       const key = String(productKey);
+      const visitorId = getFavoriteVisitorId();
+      const favorites = getFavorites();
       const willLike = !Boolean(favorites[key]);
-      if (willLike) favorites[key] = true;
-      else delete favorites[key];
-      saveFavorites(favorites);
-      applyFavoriteState(btn, willLike);
-      if (willLike) showToast("Ditambahkan ke favorit ❤️");
+      btn.disabled = true;
+      try {
+        if (willLike) {
+          const res = await fetch(`${SUPABASE_REST}/product_favorites`, {
+            method: 'POST',
+            headers: { ...supabaseHeaders(), 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ product_key: key, visitor_id: visitorId })
+          });
+          if (!res.ok) throw new Error(await res.text());
+          favorites[key] = true;
+          showToast("Ditambahkan ke favorit ❤️");
+        } else {
+          const res = await fetch(`${SUPABASE_REST}/product_favorites?product_key=eq.${encodeURIComponent(key)}&visitor_id=eq.${encodeURIComponent(visitorId)}`, {
+            method: 'DELETE',
+            headers: supabaseHeaders()
+          });
+          if (!res.ok) throw new Error(await res.text());
+          delete favorites[key];
+        }
+        saveFavorites(favorites);
+        await loadFavoriteRows();
+        filterProducts();
+      } catch (e) {
+        showToast("Favorit gagal disimpan: " + (e.message || e), true);
+      } finally {
+        btn.disabled = false;
+      }
     }
+
     function setFilter(type) {
       playCyberBeep(600, 'triangle', 0.04);
       activeFilter = type;
@@ -799,11 +858,12 @@
       });
       renderProducts(filtered);
     }
-    function renderProducts(data) {
+    async function renderProducts(data) {
       const container = document.getElementById("product-list");
       const loading = document.getElementById("loading");
       if (loading) loading.classList.add("hidden");
       container.innerHTML = "";
+      await loadFavoriteRows();
       if (data.length === 0) {
         container.innerHTML = `<div class="col-span-full text-center py-8 text-slate-500">Tidak ada produk ditemukan.</div>`;
         return;
@@ -881,7 +941,8 @@
         const likeButton = card.querySelector('.like-svg')?.closest('button');
         if (likeButton) {
           const favorites = getFavorites();
-          applyFavoriteState(likeButton, Boolean(favorites[favoriteKey(item)]));
+          const key = favoriteKey(item);
+          applyFavoriteState(likeButton, Boolean(favorites[key]), favoriteCount(key));
         }
       });
     }
@@ -1254,6 +1315,7 @@
           document.getElementById("admin-btn").className = "bg-emerald-900/80 text-emerald-300 text-xs px-3 py-2 rounded-lg border border-emerald-600/50 font-bold";
           filterProducts();
           loadAdminOrders();
+          loadReviews();
         } else if (inputPassword) {
           alert("Password Salah!");
         }
