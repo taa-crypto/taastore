@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAASTORE - Store Resmi Gems & Items</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">  
+  <!-- Favicon Logo Client -->
+  <link rel="icon" type="image/jpeg" href="./logo.jpeg">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Library Vanilla-Tilt untuk Fitur 3D Card Effect -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
+
+  <style>
+    html, body { background: #020617; }
+    body { min-height: 100vh; }
+    /* TAASTORE splash: independent from the left-aligned header */
+    #taastore-splash {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: #020617;
+      opacity: 1; visibility: visible;
+      transition: opacity .55s ease, visibility .55s ease;
+    }
+    #taastore-splash::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background-image: linear-gradient(to right, rgba(255,255,255,.03) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 35px 35px;
+    }
+    #taastore-splash.splash-hide { opacity: 0; visibility: hidden; pointer-events: none; }
+    .splash-inner { position: relative; z-index: 1; text-align: center; transform: translateY(0) scale(1); animation: splash-enter .65s cubic-bezier(.16,1,.3,1) both; }
+    .splash-logo { width: 92px; height: 92px; object-fit: cover; border-radius: 22px; display: block; margin: 0 auto 16px; border: 1px solid rgba(71,85,105,.8); box-shadow: 0 0 35px rgba(6,182,212,.22); }
+    .splash-title { margin: 0; color: #fbbf24; font-size: clamp(1.8rem, 6vw, 2.6rem); line-height: 1; font-weight: 900; letter-spacing: .16em; }
+    .splash-subtitle { margin-top: 9px; color: #22d3ee; font-size: clamp(.62rem, 2.2vw, .78rem); line-height: 1; font-weight: 700; letter-spacing: .16em; white-space: nowrap; }
+    .splash-line { width: 130px; height: 2px; margin: 20px auto 0; overflow: hidden; border-radius: 99px; background: rgba(34,211,238,.12); }
+    .splash-line::after { content: ''; display: block; width: 42%; height: 100%; border-radius: inherit; background: #22d3ee; animation: splash-load 1.05s ease-in-out infinite; }
+    @keyframes splash-enter { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+    @keyframes splash-load { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
+
+    /* Search icon: local SVG asset, no emoji */
+    .search-wrap { position: relative; }
+    .search-flaticon { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); opacity: .95; pointer-events: none; z-index: 2; }
+    #search-input { padding-left: 42px !important; }
+
+    /* Keep item artwork together while floating */
+    .local-item-art { animation: item-float 3.8s ease-in-out infinite; transform-origin: center; }
+    @keyframes item-float { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-7px,0); } }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #f59e0b;
+    }
+    /* Ambient Cyber Grid Background */
+    .bg-grid-pattern {
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 35px 35px;
+    }
+    /* Running Text Seamless Infinite Loop */
+    @keyframes marquee-seamless {
+      0% { transform: translateX(0%); }
+      100% { transform: translateX(-50%); }
+    }
+    .animate-marquee-seamless {
+      display: flex;
+      width: max-content;
+      animation: marquee-seamless 25s linear infinite;
+    }
+    .animate-marquee-seamless:hover {
+      animation-play-state: paused;
+    }
+
+    /* CSS Animasi Gradient Border & Pop-Up Scale-Up Modal Checkout */
+    @keyframes spin-border {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .animated-border {
+      position: relative;
+      overflow: hidden;
+    }
+    .animated-border::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: conic-gradient(transparent, #f59e0b, transparent 30%, #06b6d4, transparent 70%);
+      animation: spin-border 6s linear infinite;
+      z-index: 0;
+    }
+    .animated-border-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .modal-scale-up {
+      animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes scaleUp {
+      0% { opacity: 0; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* FITUR EASTER EGG: Overdrive Mode Theme Injection */
+    .overdrive-mode {
+      filter: hue-rotate(90deg) contrast(1.25) brightness(1.1);
+      transition: filter 0.8s ease-in-out;
+    }
+    @keyframes glitch {
+      0% { transform: translate(0); }
+      20% { transform: translate(-3px, 3px); }
+      40% { transform: translate(-3px, -3px); }
+      60% { transform: translate(3px, 3px); }
+      80% { transform: translate(3px, -3px); }
+      100% { transform: translate(0); }
+    }
+    .glitch-anim {
+      animation: glitch 0.15s ease infinite;
+    }
+  </style>
+</head>
+<body id="main-body" class="bg-slate-950 text-white min-h-screen pb-12 relative overflow-x-hidden font-sans bg-grid-pattern transition-all duration-700">
+  <div id="taastore-splash" aria-label="TAASTORE loading">
+    <div class="splash-inner">
+      <img src="./logo.jpeg" alt="TAASTORE" class="splash-logo">
+      <h1 class="splash-title">TAASTORE</h1>
+      <div class="splash-subtitle">GROWTOPIA MARKETPLACE</div>
+      <div class="splash-line" aria-hidden="true"></div>
+    </div>
+  </div>
+  
+  <!-- Canvas Cursor Glow & Particle Trail -->
+  <canvas id="cursorCanvas" class="fixed inset-0 pointer-events-none z-50"></canvas>
+
+  <!-- Canvas Background Bintang Jatuh & FITUR 1: Audio Visualizer Overlay -->
+  <canvas id="starCanvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+  <canvas id="visualizerCanvas" class="fixed inset-0 pointer-events-none z-5 opacity-40"></canvas>
+
+  <!-- Glow Ambient Orbs -->
+  <div class="fixed -top-32 -left-32 w-96 h-96 bg-cyan-500/15 rounded-full blur-[120px] pointer-events-none z-0"></div>
+  <div class="fixed -bottom-32 -right-32 w-96 h-96 bg-amber-500/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
+  
+  <!-- FITUR EASTER EGG: Banner Floating Banner Notifikasi Overdrive Rahasia -->
+  <div id="overdrive-banner" class="hidden fixed top-0 left-0 right-0 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 text-white font-black text-xs text-center py-2 z-50 tracking-widest uppercase shadow-2xl glitch-anim">
+    ⚠️ WARNING: OVERDRIVE RAMPAGE MODE ACTIVATED! SYSTEM OVERHEAT! (PRESS 'TAA' TO ESCAPE) ⚠️
+  </div>
+
+  <!-- Main Wrapper -->
+  <div class="relative z-10">
+    
+    <!-- Running Text / Marquee Seamless -->
+    <div class="bg-slate-900/80 backdrop-blur-md border-b border-amber-500/20 py-2.5 overflow-hidden mb-6">
+      <div class="animate-marquee-seamless text-amber-400 font-medium text-sm flex gap-8">
+        <div class="flex gap-8 shrink-0 items-center">
+          <span>🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!</span>
+          <span>⚡ Promo Spesial Hari Ini: Dapatkan bonus dan harga grosir terbaik untuk setiap pembelian partai besar!</span>
+          <span>💬 Butuh bantuan atau mau rekber? Hubungi Customer Service resmi kami via WhatsApp aktif 24 jam!</span>
+        </div>
+        <div class="flex gap-8 shrink-0 items-center" aria-hidden="true">
+          <span>🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!</span>
+          <span>⚡ Promo Spesial Hari Ini: Dapatkan bonus dan harga grosir terbaik untuk setiap pembelian partai besar!</span>
+          <span>💬 Butuh bantuan atau mau rekber? Hubungi Customer Service resmi kami via WhatsApp aktif 24 jam!</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="container mx-auto px-4 py-2">
+      <!-- Header -->
+      <header class="flex flex-wrap justify-between items-center gap-4 mb-6 border-b border-slate-800/80 pb-4 backdrop-blur-sm bg-slate-900/30 p-4 rounded-2xl border border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="relative group">
+            <div class="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-amber-500 rounded-xl blur opacity-50 group-hover:opacity-75 transition duration-200"></div>
+            <img src="./logo.jpeg" alt="TAASTORE Logo" class="relative w-10 h-10 rounded-xl object-cover border border-slate-700">
+          </div>
+          <div>
+            <h1 class="text-2xl md:text-3xl font-black text-amber-400 tracking-wider">TAASTORE</h1>
+            <p class="text-[10px] text-cyan-400 font-semibold tracking-widest uppercase">Gems & Items Marketplace</p>
+          </div>
+        </div>
+        <!-- Tombol Media Sosial & FITUR 1: Audio BGM Player Toggle -->
+        <div class="flex items-center gap-2 md:gap-3">
+          <!-- Tombol Music Visualizer Player -->
+          <button 
+            id="bgm-btn" 
+            onclick="toggleCyberBGM()" 
+            class="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-semibold transition shadow-[0_0_10px_rgba(6,182,212,0.1)] hover:shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+            <i id="bgm-icon" class="fa-solid fa-compact-disc"></i>
+            <span id="bgm-text" class="hidden sm:inline">Play Chill BGM</span>
+          </button>
+
+          <!-- Saluran WhatsApp -->
+          <a href="https://whatsapp.com/channel/0029Vb6t9LsKmCPSxiav7j00" 
+             target="_blank" 
+             rel="noopener noreferrer" 
+             title="Saluran WhatsApp Resmi"
+             class="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold transition shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+            <i class="fa-brands fa-whatsapp text-sm"></i>
+            <span class="hidden sm:inline">Saluran WA</span>
+          </a>
+          <!-- Instagram -->
+          <a href="https://www.instagram.com/taastore.gt?igsh=YnE0MzV2anpxNTNo" 
+             target="_blank" 
+             rel="noopener noreferrer" 
+             title="Instagram TAASTORE"
+             class="flex items-center gap-2 px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 rounded-lg text-xs font-semibold transition shadow-[0_0_10px_rgba(236,72,153,0.1)] hover:shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+            <i class="fa-brands fa-instagram text-sm"></i>
+            <span class="hidden sm:inline">Instagram</span>
+          </a>
+          <!-- Admin Button -->
+          <button id="admin-btn" onclick="toggleAdminPanel()" class="bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition">
+            Admin Login
+          </button>
+        </div>
+      </header>
+
+      <!-- Banner Promosi -->
+      <div class="mb-8 p-6 bg-gradient-to-r from-cyan-950/40 via-slate-900/90 to-amber-950/30 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-cyan-500/10 rounded-full blur-2xl"></div>
+        <div class="relative z-10">
+          <span class="bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-[10px] px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">PROMO SPESIAL</span>
+          <h2 class="text-xl md:text-2xl font-black text-white mt-2 tracking-wide">Gems & Items Ready Stock!</h2>
+          <p class="text-slate-400 text-sm mt-0.5">Transaksi cepat, aman, dan terpercaya 24/7 via WhatsApp CS.</p>
+        </div>
+        <div class="relative z-10 text-xs text-amber-400 bg-amber-500/10 px-3.5 py-2 rounded-xl border border-amber-500/30 font-medium flex items-center gap-2">
+          <span>⚡ Garansi Proses Cepat</span>
+          <span class="text-[10px] text-slate-500 hover:text-cyan-400 transition cursor-help" title="Ketik 'TAA' di keyboard untuk mengaktifkan Overdrive Mode!">(Hint: TAA)</span>
+        </div>
+      </div>
+
+      <!-- Panel Admin -->
+      <section id="admin-panel" class="hidden mb-10 bg-slate-900/90 backdrop-blur-md p-6 rounded-2xl border border-amber-500/50 shadow-2xl">
+        <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+          <h2 class="text-lg font-bold text-amber-400">Panel Manajemen Produk (Protected)</h2>
+          <button onclick="logoutAdmin()" class="text-xs bg-rose-900/80 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-700/50 hover:bg-rose-800">Logout Admin</button>
+        </div>
+        <form id="item-form" onsubmit="saveItem(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          <input type="hidden" id="item-id">
+          <input type="text" id="item-name" placeholder="Nama Produk" required class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          <input type="number" id="item-price" placeholder="Harga (Rp)" required class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          <input type="url" id="item-image" placeholder="Image URL (e.g. https://...)" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          
+          <select id="item-type" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+            <option value="beli">BELI</option>
+            <option value="jual">JUAL</option>
+          </select>
+          <select id="item-status" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+            <option value="ready">Ready</option>
+            <option value="limited">Limited</option>
+            <option value="empty">Out of Stock</option>
+          </select>
+          
+          <div class="flex gap-2 col-span-1 md:col-span-3">
+            <button type="submit" id="form-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-2.5 rounded-xl text-sm shadow-lg shadow-amber-500/20">Tambah Produk</button>
+            <button type="button" onclick="resetForm()" class="bg-slate-800 text-slate-300 p-2.5 rounded-xl text-sm border border-slate-700">Batal</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Search & Filter -->
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+        <div class="w-full md:w-1/3 search-wrap">
+          <img src="./assets/search-flaticon.svg" alt="" aria-hidden="true" class="search-flaticon">
+          <input 
+            type="text" 
+            id="search-input" 
+            oninput="filterProducts()" 
+            placeholder="Cari nama produk..." 
+            aria-label="Cari nama produk"
+            class="w-full bg-slate-900/80 backdrop-blur-md border border-slate-800 px-4 py-2.5 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition text-sm shadow-inner"
+          />
+        </div>
+        <div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-1">
+          <button 
+            onclick="setFilter('all')" 
+            id="filter-all" 
+            class="filter-btn active-filter bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition whitespace-nowrap shadow-lg shadow-amber-500/20">
+            Semua
+          </button>
+          <button 
+            onclick="setFilter('beli')" 
+            id="filter-beli" 
+            class="filter-btn bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:bg-slate-800 px-4 py-2 rounded-xl text-xs transition whitespace-nowrap">
+            Katalog Beli
+          </button>
+          <button 
+            onclick="setFilter('jual')" 
+            id="filter-jual" 
+            class="filter-btn bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:bg-slate-800 px-4 py-2 rounded-xl text-xs transition whitespace-nowrap">
+            Katalog Jual
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <main class="mb-12">
+        <div id="loading" class="text-slate-400 py-8 text-center">Memuat data barang...</div>
+        <div id="product-list" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+      </main>
+
+      <!-- Section Testimoni / Review Pelanggan -->
+      <section class="mt-14 mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-2xl font-black text-white tracking-wide">Ulasan Pelanggan</h2>
+            <p class="text-slate-400 text-xs mt-0.5">Pengalaman langsung dari pembeli di TAASTORE</p>
+          </div>
+          <button onclick="openReviewModal()" class="bg-slate-900 hover:bg-slate-800 border border-amber-500/30 text-amber-400 font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-lg">
+            ✍️ Tulis Testimoni
+          </button>
+        </div>
+        <div id="review-list" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+      </section>
+    </div>
+    
+    <!-- Modal Checkout Form Beranimasi Glassmorphism + Gradient Border -->
+    <div id="cart-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 z-50">
+      <div class="animated-border p-[2px] rounded-3xl max-w-md w-full shadow-2xl modal-scale-up">
+        <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-6 relative overflow-hidden">
+          <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <img src="./logo.jpeg" alt="Logo" class="w-6 h-6 rounded-md">
+              <h3 class="font-bold text-lg text-amber-400" id="cart-item-name">Detail Pesanan</h3>
+            </div>
+            <button onclick="closeCartModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+          </div>
+          
+          <form onsubmit="sendToWA(event)" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-slate-400 mb-1 block">Harga Satuan</label>
+                <div class="text-base font-bold text-white" id="cart-item-price">Rp 0</div>
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 mb-1 block">Jumlah / Qty</label>
+                <input type="number" id="cart-qty" min="1" value="1" oninput="calculateTotal()" required class="w-full bg-slate-950/80 border border-slate-800 p-2 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">Nama Pembeli</label>
+              <input type="text" id="buyer-name" placeholder="Masukkan nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
+                <input type="text" id="buyer-game-id" placeholder="Contoh: Azka07" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 mb-1 block">World Name</label>
+                <input type="text" id="buyer-world" placeholder="Contoh: TAASTORE" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">Metode Pembayaran</label>
+              <select id="buyer-payment" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+                <option value="QRIS">QRIS All Payment</option>
+                <option value="BCA">Bank BCA</option>
+                <option value="DANA">DANA</option>
+                <option value="GOPAY">GoPay</option>
+                <option value="Seabank">Seabank</option>
+              </select>
+            </div>
+            <div class="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 mt-2">
+              <div class="text-xs text-slate-400 mb-0.5">Total Pembayaran:</div>
+              <div class="text-2xl font-black text-amber-400" id="cart-total-price">Rp 0</div>
+            </div>
+            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-2xl transition mt-2 shadow-lg shadow-amber-500/20">
+              Kirim Pesanan ke WhatsApp CS
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Tambah Review -->
+    <div id="review-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+          <h3 class="font-bold text-lg text-amber-400">Tulis Testimoni</h3>
+          <button onclick="closeReviewModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+        </div>
+        <form onsubmit="submitReview(event)" class="space-y-3">
+          <div>
+            <label class="text-xs text-slate-400 mb-1 block">GrowID / Nama</label>
+            <input type="text" id="review-name" placeholder="Contoh: GrowMaster99" required class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 mb-1 block">Rating Bintang</label>
+            <select id="review-rating" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-amber-400 text-sm focus:outline-none focus:border-amber-400 font-bold">
+              <option value="5">⭐⭐⭐⭐⭐ (Sangat Puas)</option>
+              <option value="4">⭐⭐⭐⭐ (Puas)</option>
+              <option value="3">⭐⭐⭐ (Cukup)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 mb-1 block">Pesan Ulasan</label>
+            <textarea id="review-comment" rows="3" placeholder="Contoh: Proses kilat tidak sampai 2 menit, mantap adminnya!" required class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400"></textarea>
+          </div>
+          <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-2xl transition mt-2 shadow-lg shadow-amber-500/20">
+            Kirim Ulasan
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 hidden bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-2xl font-medium transition-all duration-300 z-50 border border-emerald-400/30">
+      <span id="toast-message">Notifikasi</span>
+    </div>
+
+    <!-- Tombol Sound Mute/Unmute Toggle SFX -->
+    <button 
+      id="sound-toggle-btn"
+      onclick="toggleAudio()" 
+      class="fixed bottom-5 right-5 bg-slate-900/90 backdrop-blur-md border border-slate-800 text-amber-400 hover:text-amber-300 px-3.5 py-2 rounded-full shadow-2xl flex items-center gap-2 text-xs font-semibold transition hover:scale-105 z-40"
+      title="Toggle Suara Cyberpunk"
+    >
+      <span id="sound-icon">🔊</span> SFX: <span id="sound-status">ON</span>
+    </button>
+
+    <!-- Tombol Kritik & Saran CS -->
+    <a 
+      href="https://wa.me/6282123602358?text=Halo%20CS%20TAASTORE,%20saya%20ingin%20memberikan%20kritik%20dan%20saran:" 
+      target="_blank" 
+      class="fixed bottom-5 left-5 bg-slate-900/90 backdrop-blur-md border border-slate-800 text-slate-200 hover:text-amber-400 px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 text-xs font-semibold transition hover:scale-105 z-40"
+    >
+      💬 Kritik & Saran
+    </a>
+  </div>
+
+  <!-- JavaScript Logika Utama TAASTORE -->
+  <script>
+    const API_URL = "https://taastore-backend.vercel.app";
+    let isAdmin = false;
+    let adminKey = "";
+    let itemsData = [];
+    let activeFilter = 'all';
+    let selectedItem = null;
+    const defaultReviews = [];
+
+    /* Audio Synthesizer (Retro Cyber Beep / Click SFX) */
+    let soundEnabled = true;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playCyberBeep(freq = 800, type = 'sine', duration = 0.05) {
+      if (!soundEnabled) return;
+      try {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.log("Audio not allowed yet");
+      }
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      const statusText = document.getElementById("sound-status");
+      const iconText = document.getElementById("sound-icon");
+      if (soundEnabled) {
+        statusText.innerText = "ON";
+        iconText.innerText = "🔊";
+        playCyberBeep(1200, 'sine', 0.08);
+      } else {
+        statusText.innerText = "OFF";
+        iconText.innerText = "🔇";
+      }
+    }
+
+    async function loadItems() {
+      try {
+        const response = await fetch(`${API_URL}/items`);
+        itemsData = await response.json();
+        filterProducts();
+      } catch (err) {
+        const loadingEl = document.getElementById("loading");
+        if (loadingEl) {
+          loadingEl.innerText = "Gagal memuat barang. Cek koneksi backend.";
+          loadingEl.className = "text-rose-500 text-center py-8";
+        }
+      }
+    }
+    function showToast(message, isError = false) {
+      const toast = document.getElementById("toast");
+      const toastMessage = document.getElementById("toast-message");
+      
+      toastMessage.innerText = message;
+      toast.className = `fixed bottom-20 right-5 block ${isError ? 'bg-rose-600 border-rose-400/30' : 'bg-emerald-600 border-emerald-400/30'} text-white px-5 py-3 rounded-xl shadow-2xl font-medium transition-all duration-300 z-50 border`;
+      
+      setTimeout(() => {
+        toast.className = toast.className.replace("block", "hidden");
+      }, 3000);
+    }
+    function toggleLike(btn) {
+      playCyberBeep(1000, 'sine', 0.06);
+      const countEl = btn.querySelector('.like-count');
+      let currentLikes = parseInt(countEl.innerText);
+      
+      if (btn.classList.contains('liked')) {
+        btn.classList.remove('liked');
+        btn.classList.remove('text-rose-500');
+        btn.classList.add('text-slate-400');
+        countEl.innerText = currentLikes - 1;
+      } else {
+        btn.classList.add('liked');
+        btn.classList.add('text-rose-500');
+        btn.classList.remove('text-slate-400');
+        countEl.innerText = currentLikes + 1;
+        showToast("Terima kasih atas respons positifnya! ❤️");
+      }
+    }
+    function setFilter(type) {
+      playCyberBeep(600, 'triangle', 0.04);
+      activeFilter = type;
+      
+      const btnAll = document.getElementById('filter-all');
+      const btnBeli = document.getElementById('filter-beli');
+      const btnJual = document.getElementById('filter-jual');
+      const activeClass = "filter-btn active-filter bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition whitespace-nowrap shadow-lg shadow-amber-500/20";
+      const inactiveClass = "filter-btn bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:bg-slate-800 px-4 py-2 rounded-xl text-xs transition whitespace-nowrap";
+      
+      if (btnAll) btnAll.className = type === 'all' ? activeClass : inactiveClass;
+      if (btnBeli) btnBeli.className = type === 'beli' ? activeClass : inactiveClass;
+      if (btnJual) btnJual.className = type === 'jual' ? activeClass : inactiveClass;
+      
+      filterProducts();
+    }
+    function filterProducts() {
+      const searchInput = document.getElementById("search-input");
+      const searchKeyword = searchInput ? searchInput.value.toLowerCase() : "";
+      const filtered = itemsData.filter(item => {
+        const matchSearch = item.name.toLowerCase().includes(searchKeyword);
+        const itemType = (item.type || 'beli').toLowerCase();
+        const matchType = activeFilter === 'all' || itemType === activeFilter;
+        return matchSearch && matchType;
+      });
+      renderProducts(filtered);
+    }
+    function renderProducts(data) {
+      const container = document.getElementById("product-list");
+      const loading = document.getElementById("loading");
+      if (loading) loading.classList.add("hidden");
+      container.innerHTML = "";
+      if (data.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center py-8 text-slate-500">Tidak ada produk ditemukan.</div>`;
+        return;
+      }
+      data.forEach(item => {
+        const card = document.createElement("div");
+        card.setAttribute("data-tilt", "");
+        card.setAttribute("data-tilt-max", "12");
+        card.setAttribute("data-tilt-speed", "400");
+        card.setAttribute("data-tilt-glare", "true");
+        card.setAttribute("data-tilt-max-glare", "0.25");
+        
+        card.className = "bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-amber-500/30 transition duration-300";
+        
+        let stockBadge = `<span class="bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 text-[10px] font-bold px-2 py-0.5 rounded-md">READY</span>`;
+        let isOut = false;
+        if (item.stock_status === 'limited') {
+          stockBadge = `<span class="bg-amber-950/80 text-amber-400 border border-amber-800/50 text-[10px] font-bold px-2 py-0.5 rounded-md">LIMITED</span>`;
+        } else if (item.stock_status === 'empty') {
+          stockBadge = `<span class="bg-rose-950/80 text-rose-400 border border-rose-800/50 text-[10px] font-bold px-2 py-0.5 rounded-md">OUT OF STOCK</span>`;
+          isOut = true;
+        }
+        const defaultImage = 'https://placehold.co/400x250/0f172a/f59e0b?text=TAASTORE';
+        const normalizedName = (item.name || '').toUpperCase().trim();
+        const localItemAsset =
+          /\bBLUE\s+GEM\s+LOCK\b/.test(normalizedName) || /\bBGL\b/.test(normalizedName)
+            ? './assets/bgl.png'
+            : /\bDIAMOND\s+LOCK\b/.test(normalizedName) || /\bDL\b/.test(normalizedName)
+              ? './assets/dl.png'
+              : '';
+        const imageUrl = localItemAsset || (item.image_url && item.image_url.trim() !== '' ? item.image_url : defaultImage);
+        const itemType = (item.type || 'BELI').toUpperCase();
+        let typeBadge = itemType === 'JUAL' 
+          ? `<span class="bg-purple-950/80 text-purple-300 border border-purple-800/50 text-[10px] font-bold px-2 py-0.5 rounded-md">JUAL</span>`
+          : `<span class="bg-blue-950/80 text-cyan-300 border border-cyan-800/50 text-[10px] font-bold px-2 py-0.5 rounded-md">BELI</span>`;
+        
+        card.innerHTML = `
+          <div>
+            <div class="w-full h-44 bg-slate-950/80 rounded-xl flex items-center justify-center border border-slate-800 mb-4 overflow-hidden group-hover:border-slate-700 transition p-4">
+              <img src="${imageUrl}" alt="${item.name}" class="max-h-full max-w-full object-contain group-hover:scale-110 transition duration-300 [image-rendering:pixelated]" onerror="this.onerror=null; this.src='${defaultImage}'" />
+            </div>
+            <div class="flex justify-between items-start mb-2 gap-2">
+              <h3 class="font-bold text-slate-100 text-base leading-tight">${item.name}</h3>
+              <button 
+                onclick="toggleLike(this)" 
+                class="p-1.5 rounded-lg bg-slate-950/60 hover:bg-slate-800 border border-slate-800 text-slate-400 transition flex items-center gap-1 text-xs shrink-0"
+                title="Sukai produk"
+              >
+                ❤️ <span class="like-count font-bold text-slate-300">0</span>
+              </button>
+            </div>
+            <div class="flex gap-1.5 mb-3">
+              ${stockBadge}
+              ${typeBadge}
+            </div>
+            <div class="text-amber-400 font-black text-xl mb-4">
+              Rp ${(item.price || 0).toLocaleString('id-ID')}
+            </div>
+          </div>
+          <div>
+            <button 
+              onclick="openCartModal(${item.id})" 
+              ${isOut ? 'disabled' : ''} 
+              class="w-full text-center ${isOut ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10'} font-bold py-2.5 px-4 rounded-xl transition duration-200"
+            >
+              ${isOut ? 'Stok Habis' : 'Beli Sekarang'}
+            </button>
+            ${isAdmin ? `
+              <div class="flex gap-2 mt-3 pt-3 border-t border-slate-800">
+                <button onclick="editItem(${item.id})" class="flex-1 bg-blue-600/80 hover:bg-blue-600 text-xs py-1.5 rounded-lg font-medium border border-blue-500/30">Edit</button>
+                <button onclick="deleteItem(${item.id})" class="flex-1 bg-rose-600/80 hover:bg-rose-600 text-xs py-1.5 rounded-lg font-medium border border-rose-500/30">Hapus</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      if (window.VanillaTilt) {
+        VanillaTilt.init(document.querySelectorAll("#product-list [data-tilt]"));
+      }
+    }
+
+    function loadReviews() {
+      const container = document.getElementById("review-list");
+      const stored = localStorage.getItem("taastore_reviews");
+      const reviews = stored ? JSON.parse(stored) : defaultReviews;
+      
+      container.innerHTML = "";
+      if (reviews.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full text-center py-10 bg-slate-900/40 rounded-2xl border border-slate-800/60 backdrop-blur-md">
+            <div class="text-3xl mb-2">💬</div>
+            <p class="text-slate-300 font-semibold text-sm">Belum Ada Ulasan Pelanggan</p>
+            <p class="text-slate-500 text-xs mt-1">Jadilah pembeli pertama di TAASTORE dan bagikan pengalaman transaksimu di sini!</p>
+          </div>
+        `;
+        return;
+      }
+      reviews.forEach(rev => {
+        const stars = "⭐".repeat(rev.rating);
+        const card = document.createElement("div");
+        card.className = "bg-slate-900/60 backdrop-blur-md p-4 rounded-2xl border border-slate-800/80 flex flex-col justify-between";
+        card.innerHTML = `
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-bold text-sm text-slate-200">${rev.name}</span>
+              <span class="text-xs text-amber-400">${stars}</span>
+            </div>
+            <p class="text-xs text-slate-400 italic">"${rev.comment}"</p>
+          </div>
+          <div class="text-[10px] text-slate-600 mt-3 text-right">${rev.date}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+    function openReviewModal() {
+      playCyberBeep(700, 'sine', 0.05);
+      document.getElementById("review-modal").classList.remove("hidden");
+    }
+    function closeReviewModal() {
+      playCyberBeep(400, 'sine', 0.04);
+      document.getElementById("review-modal").classList.add("hidden");
+    }
+    function submitReview(e) {
+      e.preventDefault();
+      playCyberBeep(1200, 'sine', 0.08);
+      const name = document.getElementById("review-name").value;
+      const rating = parseInt(document.getElementById("review-rating").value);
+      const comment = document.getElementById("review-comment").value;
+      const stored = localStorage.getItem("taastore_reviews");
+      const reviews = stored ? JSON.parse(stored) : [];
+      reviews.unshift({
+        name,
+        rating,
+        comment,
+        date: "Baru saja"
+      });
+      localStorage.setItem("taastore_reviews", JSON.stringify(reviews));
+      loadReviews();
+      closeReviewModal();
+      showToast("Terima kasih atas ulasannya! ✨");
+      document.getElementById("review-name").value = "";
+      document.getElementById("review-comment").value = "";
+    }
+    function openCartModal(id) {
+      playCyberBeep(900, 'sine', 0.06);
+      selectedItem = itemsData.find(i => i.id === id);
+      if (!selectedItem) return;
+      document.getElementById("cart-item-name").innerText = selectedItem.name;
+      document.getElementById("cart-item-price").innerText = `Rp ${selectedItem.price.toLocaleString('id-ID')}`;
+      document.getElementById("cart-qty").value = 1;
+      calculateTotal();
+      document.getElementById("cart-modal").classList.remove("hidden");
+    }
+    function closeCartModal() {
+      playCyberBeep(350, 'sine', 0.04);
+      document.getElementById("cart-modal").classList.add("hidden");
+      selectedItem = null;
+    }
+    function calculateTotal() {
+      if (!selectedItem) return;
+      const qty = parseInt(document.getElementById("cart-qty").value) || 1;
+      const total = selectedItem.price * qty;
+      document.getElementById("cart-total-price").innerText = `Rp ${total.toLocaleString('id-ID')}`;
+    }
+    function sendToWA(e) {
+      e.preventDefault();
+      playCyberBeep(1100, 'square', 0.1);
+      if (!selectedItem) return;
+      const qty = parseInt(document.getElementById("cart-qty").value) || 1;
+      const total = selectedItem.price * qty;
+      const buyerName = document.getElementById("buyer-name").value;
+      const gameId = document.getElementById("buyer-game-id").value;
+      const world = document.getElementById("buyer-world").value;
+      const payment = document.getElementById("buyer-payment").value;
+      const textMessage = 
+`🛒 *FORM PESANAN TAASTORE*
+----------------------------------------
+• *Nama Pembeli*: ${buyerName}
+• *Produk*: ${selectedItem.name}
+• *Jumlah*: ${qty}x
+• *Total Harga*: Rp ${total.toLocaleString('id-ID')}
+• *GrowID / ID Game*: ${gameId}
+• *World Name*: ${world}
+• *Metode Bayar*: ${payment}
+----------------------------------------
+Mohon diproses min, terima kasih! 🙏`;
+      const waText = encodeURIComponent(textMessage);
+      window.open(`https://wa.me/6282123602358?text=${waText}`, '_blank');
+      closeCartModal();
+    }
+    function toggleAdminPanel() {
+      playCyberBeep(800, 'sawtooth', 0.05);
+      if (!isAdmin) {
+        const inputPassword = prompt("Masukkan Password Admin TAASTORE:");
+        if (inputPassword === "TAASTORE.ID") {
+          isAdmin = true;
+          adminKey = inputPassword;
+          document.getElementById("admin-panel").classList.remove("hidden");
+          document.getElementById("admin-btn").innerText = "Admin Active";
+          document.getElementById("admin-btn").className = "bg-emerald-900/80 text-emerald-300 text-xs px-3 py-2 rounded-lg border border-emerald-600/50 font-bold";
+          filterProducts();
+        } else if (inputPassword) {
+          alert("Password Salah!");
+        }
+      }
+    }
+    function logoutAdmin() {
+      isAdmin = false;
+      adminKey = "";
+      document.getElementById("admin-panel").classList.add("hidden");
+      document.getElementById("admin-btn").innerText = "Admin Login";
+      document.getElementById("admin-btn").className = "bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition";
+      resetForm();
+      filterProducts();
+    }
+    function editItem(id) {
+      const item = itemsData.find(i => i.id === id);
+      if (item) {
+        document.getElementById("item-id").value = item.id;
+        document.getElementById("item-name").value = item.name;
+        document.getElementById("item-price").value = item.price;
+        document.getElementById("item-image").value = item.image_url || "";
+        document.getElementById("item-type").value = (item.type || 'beli').toLowerCase();
+        document.getElementById("item-status").value = item.stock_status || "ready";
+        document.getElementById("form-btn").innerText = "Simpan Perubahan";
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+    async function saveItem(e) {
+      e.preventDefault();
+      const id = document.getElementById("item-id").value;
+      const name = document.getElementById("item-name").value;
+      const price = parseFloat(document.getElementById("item-price").value);
+      const image_url = document.getElementById("item-image").value;
+      const type = document.getElementById("item-type").value;
+      const stock_status = document.getElementById("item-status").value;
+      const payload = { name, price, image_url, type, stock_status };
+      const headers = {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey
+      };
+      if (id) {
+        await fetch(`${API_URL}/items/${id}`, {
+          method: "PUT",
+          headers: headers,
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await fetch(`${API_URL}/items`, {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(payload)
+        });
+      }
+      resetForm();
+      loadItems();
+    }
+    async function deleteItem(id) {
+      if (confirm("Yakin ingin menghapus produk ini?")) {
+        await fetch(`${API_URL}/items/${id}`, {
+          method: "DELETE",
+          headers: { "x-admin-key": adminKey }
+        });
+        loadItems();
+      }
+    }
+    function resetForm() {
+      document.getElementById("item-id").value = "";
+      document.getElementById("item-name").value = "";
+      document.getElementById("item-price").value = "";
+      document.getElementById("item-image").value = "";
+      document.getElementById("item-type").value = "beli";
+      document.getElementById("item-status").value = "ready";
+      document.getElementById("form-btn").innerText = "Tambah Produk";
+    }
+    window.addEventListener("load", () => {
+      const splash = document.getElementById("taastore-splash");
+      if (!splash) return;
+      setTimeout(() => splash.classList.add("splash-hide"), 900);
+      setTimeout(() => splash.remove(), 1500);
+    });
+
+    loadItems();
+    loadReviews();
+  </script>
+
+  <!-- FITUR 1 & FITUR 2: CYBER-AUDIO REACTIVE VISUALIZER, LO-FI CHILL BGM & OVERDRIVE PANIC SIREN ENGINE -->
+  <script>
+    let isBgmPlaying = false;
+    let bgmOscillator = null;
+    let bgmGain = null;
+    let bgmLfo = null;
+    let panicOscillator = null;
+    let panicGain = null;
+    let panicLfo = null;
+    let visualizerAnimationId = null;
+
+    // Canvas Visualizer Engine
+    const visCanvas = document.getElementById('visualizerCanvas');
+    const visCtx = visCanvas.getContext('2d');
+    let vWidth = (visCanvas.width = window.innerWidth);
+    let vHeight = (visCanvas.height = window.innerHeight);
+
+    window.addEventListener('resize', () => {
+      vWidth = visCanvas.width = window.innerWidth;
+      vHeight = visCanvas.height = window.innerHeight;
+    });
+
+    function toggleCyberBGM() {
+      const btnText = document.getElementById("bgm-text");
+      const btnIcon = document.getElementById("bgm-icon");
+
+      if (!isBgmPlaying) {
+        startCyberBGM();
+        isBgmPlaying = true;
+        btnText.innerText = "Stop Chill BGM";
+        btnIcon.className = "fa-solid fa-pause text-amber-400 animate-spin";
+        showToast("🎵 Chill Cyber Ambient Started!");
+      } else {
+        stopCyberBGM();
+        isBgmPlaying = false;
+        btnText.innerText = "Play Chill BGM";
+        btnIcon.className = "fa-solid fa-compact-disc";
+        showToast("⏸️ Cyber BGM Paused");
+      }
+    }
+
+    // 1. CHILL CHILL AMBIENT BGM (Frekuensi 55Hz Sub-Bass Sine Wave)
+    function startCyberBGM() {
+      try {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        stopCyberBGM(); // Clean up existing
+
+        bgmOscillator = audioCtx.createOscillator();
+        bgmGain = audioCtx.createGain();
+        bgmLfo = audioCtx.createOscillator();
+
+        bgmOscillator.type = 'sine'; // Suara santai & lembut di telinga
+        bgmOscillator.frequency.setValueAtTime(55, audioCtx.currentTime); // Low Sub-bass A1
+
+        bgmLfo.type = 'sine';
+        bgmLfo.frequency.setValueAtTime(0.2, audioCtx.currentTime); // Pulsasi sangat lambat
+        
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.setValueAtTime(0.005, audioCtx.currentTime);
+
+        bgmLfo.connect(lfoGain);
+        lfoGain.connect(bgmGain.gain);
+
+        bgmGain.gain.setValueAtTime(0.015, audioCtx.currentTime); // Volume rendah tidak mengganggu
+
+        bgmOscillator.connect(bgmGain);
+        bgmGain.connect(audioCtx.destination);
+
+        bgmOscillator.start();
+        bgmLfo.start();
+
+        renderAudioVisualizer();
+      } catch(e) {
+        console.log("Audio play prevented:", e);
+      }
+    }
+
+    function stopCyberBGM() {
+      try {
+        if (bgmOscillator) {
+          bgmOscillator.stop();
+          bgmOscillator.disconnect();
+          bgmOscillator = null;
+        }
+        if (bgmLfo) {
+          bgmLfo.stop();
+          bgmLfo.disconnect();
+          bgmLfo = null;
+        }
+      } catch(e){}
+      
+      if (visualizerAnimationId) {
+        cancelAnimationFrame(visualizerAnimationId);
+      }
+      visCtx.clearRect(0, 0, vWidth, vHeight);
+    }
+
+    // 2. FITUR 2: OVERDRIVE PANIC SIREN AUDIO ENGINE (Membuat kepanikan saat Overdrive Mode Aktif)
+    function startPanicSiren() {
+      try {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        stopPanicSiren();
+
+        panicOscillator = audioCtx.createOscillator();
+        panicGain = audioCtx.createGain();
+        panicLfo = audioCtx.createOscillator();
+
+        panicOscillator.type = 'sawtooth'; // Suara tajam khas sirine bahaya
+        panicOscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+
+        // Modulasi Alarm Sirine Cepat (4Hz) naik-turun pitch
+        panicLfo.type = 'sawtooth';
+        panicLfo.frequency.setValueAtTime(4, audioCtx.currentTime); 
+        
+        const panicLfoGain = audioCtx.createGain();
+        panicLfoGain.gain.setValueAtTime(300, audioCtx.currentTime); // Sweep pitch naik turun tajam
+
+        panicLfo.connect(panicLfoGain);
+        panicLfoGain.connect(panicOscillator.frequency);
+
+        panicGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+
+        panicOscillator.connect(panicGain);
+        panicGain.connect(audioCtx.destination);
+
+        panicOscillator.start();
+        panicLfo.start();
+      } catch(e) {}
+    }
+
+    function stopPanicSiren() {
+      try {
+        if (panicOscillator) {
+          panicOscillator.stop();
+          panicOscillator.disconnect();
+          panicOscillator = null;
+        }
+        if (panicLfo) {
+          panicLfo.stop();
+          panicLfo.disconnect();
+          panicLfo = null;
+        }
+      } catch(e) {}
+    }
+
+    let visualizerLastFrame = 0;
+    const visualizerGradient = visCtx.createLinearGradient(0, vHeight, 0, vHeight - 90);
+    visualizerGradient.addColorStop(0, 'rgba(6, 182, 212, 0)');
+    visualizerGradient.addColorStop(0.5, 'rgba(6, 182, 212, 0.28)');
+    visualizerGradient.addColorStop(1, 'rgba(245, 158, 11, 0.58)');
+
+    function renderAudioVisualizer(timestamp = 0) {
+      if (timestamp - visualizerLastFrame < 33) {
+        visualizerAnimationId = requestAnimationFrame(renderAudioVisualizer);
+        return;
+      }
+      visualizerLastFrame = timestamp;
+      visCtx.clearRect(0, 0, vWidth, vHeight);
+      const bars = 48;
+      const barWidth = vWidth / bars;
+      const time = timestamp * 0.0015;
+      visCtx.fillStyle = visualizerGradient;
+      for (let i = 0; i < bars; i++) {
+        const barHeight = Math.max(8, Math.sin(time + i * 0.15) * 35 + Math.cos(time * 0.3 + i * 0.1) * 20 + 45);
+        visCtx.fillRect(i * barWidth, vHeight - barHeight, Math.max(1, barWidth - 3), barHeight);
+      }
+      visualizerAnimationId = requestAnimationFrame(renderAudioVisualizer);
+    }
+
+    // FITUR 3 STABILITAS & UX: Auto Pause Audio Saat User Pindah Tab
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (isBgmPlaying) stopCyberBGM();
+        stopPanicSiren();
+      } else {
+        if (isBgmPlaying && !window.isOverdriveActive) startCyberBGM();
+        if (window.isOverdriveActive) startPanicSiren();
+      }
+    });
+  </script>
+
+  <!-- FITUR EASTER EGG OVERDRIVE MODE (Ketik "TAA") & PANIC MODE INTEGRATION -->
+  <script>
+    (function () {
+      const secretCode = ['t', 'a', 'a'];
+      let inputBuffer = [];
+      window.isOverdriveActive = false;
+
+      window.addEventListener('keydown', (e) => {
+        inputBuffer.push(e.key.toLowerCase());
+        if (inputBuffer.length > secretCode.length) {
+          inputBuffer.shift();
+        }
+
+        if (inputBuffer.join('') === secretCode.join('')) {
+          toggleOverdriveMode();
+        }
+      });
+
+      function toggleOverdriveMode() {
+        const body = document.getElementById('main-body');
+        const banner = document.getElementById('overdrive-banner');
+
+        window.isOverdriveActive = !window.isOverdriveActive;
+
+        if (window.isOverdriveActive) {
+          body.classList.add('overdrive-mode');
+          banner.classList.remove('hidden');
+          
+          // Stop BGM normal & Nyalakan Panic Siren Audio secara terus menerus!
+          stopCyberBGM();
+          startPanicSiren();
+          
+          showToast("⚠️ OVERDRIVE RAMPAGE UNLOCKED! SYSTEM OVERHEAT!");
+        } else {
+          body.classList.remove('overdrive-mode');
+          banner.classList.add('hidden');
+          
+          // Matikan Panic Siren & kembalikan audio normal jika aktif
+          stopPanicSiren();
+          if (isBgmPlaying) startCyberBGM();
+
+          showToast("✨ Overdrive Mode Deactivated. System Normal.");
+        }
+      }
+    })();
+  </script>
+
+  <!-- Interactive Cursor Glow & Particle Trail -->
+  <script>
+    (function () {
+      const canvas = document.getElementById('cursorCanvas');
+      const ctx = canvas.getContext('2d');
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const particles = [];
+      const mouse = { x: -100, y: -100 };
+
+      window.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+
+        for (let i = 0; i < 2; i++) {
+          particles.push({
+            x: mouse.x,
+            y: mouse.y,
+            size: Math.random() * 3.5 + 1,
+            color: Math.random() > 0.5 ? 'rgba(6, 182, 212, ' : 'rgba(245, 158, 11, ',
+            alpha: 0.6,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: (Math.random() - 0.5) * 1.2
+          });
+        }
+      });
+
+      function renderCursorTrail() {
+        ctx.clearRect(0, 0, width, height);
+
+        if (mouse.x > 0 && mouse.y > 0) {
+          const radial = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 35);
+          radial.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
+          radial.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = radial;
+          ctx.beginPath();
+          ctx.arc(mouse.x, mouse.y, 35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.alpha -= 0.025;
+
+          if (p.alpha <= 0) {
+            particles.splice(i, 1);
+          } else {
+            ctx.fillStyle = `${p.color}${p.alpha})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        requestAnimationFrame(renderCursorTrail);
+      }
+      renderCursorTrail();
+    })();
+  </script>
+
+  <!-- Script Animasi Canvas Bintang Jatuh Endless -->
+  <script>
+    (function () {
+      const canvas = document.getElementById('starCanvas');
+      const ctx = canvas.getContext('2d');
+      let width = (canvas.width = window.innerWidth);
+      let height = (canvas.height = window.innerHeight);
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+      const colorPalette = [
+        { head: 'rgba(245, 158, 11, ', body: 'rgba(251, 191, 36, ', glow: '#f59e0b' },
+        { head: 'rgba(6, 182, 212, ',  body: 'rgba(34, 211, 238, ', glow: '#06b6d4' },
+        { head: 'rgba(236, 72, 153, ', body: 'rgba(244, 114, 182, ', glow: '#ec4899' },
+        { head: 'rgba(255, 255, 255, ', body: 'rgba(226, 232, 240, ', glow: '#ffffff' }
+      ];
+      const starCount = 20;
+      const stars = [];
+      function createStar() {
+        const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+        return {
+          x: Math.random() * (width + height) - height,
+          y: Math.random() * -height,
+          length: Math.random() * 90 + 45,
+          speed: Math.random() * 4 + 2,
+          size: Math.random() * 1.3 + 0.6,
+          opacity: Math.random() * 0.75 + 0.35,
+          color: color
+        };
+      }
+      for (let i = 0; i < starCount; i++) {
+        stars.push(createStar());
+      }
+      const angle = Math.PI / 4;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      function animate() {
+        ctx.clearRect(0, 0, width, height);
+        stars.forEach((star) => {
+          star.x += star.speed * cosA;
+          star.y += star.speed * sinA;
+          const tailX = star.x - star.length * cosA;
+          const tailY = star.y - star.length * sinA;
+          const gradient = ctx.createLinearGradient(star.x, star.y, tailX, tailY);
+          gradient.addColorStop(0, `${star.color.head}${star.opacity})`);
+          gradient.addColorStop(0.35, `${star.color.body}${star.opacity * 0.45})`);
+          gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.beginPath();
+          ctx.moveTo(star.x, star.y);
+          ctx.lineTo(tailX, tailY);
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = star.size;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.size * 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = `${star.color.head}${star.opacity})`;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = star.color.glow;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          if (star.y > height + 100 || star.x > width + 100) {
+            Object.assign(star, createStar());
+          }
+        });
+        requestAnimationFrame(animate);
+      }
+      animate();
+    })();
+  </script>
+</body>
+</html>
