@@ -541,7 +541,7 @@
           </div>
           <div>
             <label class="text-xs text-slate-400 mb-1 block">Rating Bintang</label>
-            <select id="review-rating" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-amber-400 text-sm focus:outline-none focus:border-amber-400 font-bold">
+            <select id="review-rating" min="3" max="5" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-amber-400 text-sm focus:outline-none focus:border-amber-400 font-bold">
               <option value="5">⭐⭐⭐⭐⭐ (Sangat Puas)</option>
               <option value="4">⭐⭐⭐⭐ (Puas)</option>
               <option value="3">⭐⭐⭐ (Cukup)</option>
@@ -672,48 +672,23 @@
         toast.className = toast.className.replace("block", "hidden");
       }, 3000);
     }
-    // Favorite/Love is intentionally local to this browser for the prototype.
-    // It survives re-render, refresh, and closing/re-opening the site.
-    const FAVORITES_KEY = "taastore_favorites_v1";
-    function getFavorites() {
-      try {
-        const raw = localStorage.getItem(FAVORITES_KEY);
-        const parsed = raw ? JSON.parse(raw) : {};
-        return parsed && typeof parsed === "object" ? parsed : {};
-      } catch (e) {
-        return {};
-      }
-    }
-    function saveFavorites(favorites) {
-      try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites)); } catch (e) {}
-    }
-    function favoriteKey(item) {
-      return String(item?.id ?? item?.order_id ?? item?.name ?? "");
-    }
-    function applyFavoriteState(btn, liked) {
-      const countEl = btn.querySelector('.like-count');
-      if (liked) {
-        btn.classList.add('liked', 'text-rose-500');
-        btn.classList.remove('text-slate-400');
-        if (countEl) countEl.innerText = '1';
-        btn.setAttribute('aria-pressed', 'true');
-      } else {
-        btn.classList.remove('liked', 'text-rose-500');
-        btn.classList.add('text-slate-400');
-        if (countEl) countEl.innerText = '0';
-        btn.setAttribute('aria-pressed', 'false');
-      }
-    }
-    function toggleLike(btn, productKey) {
+    function toggleLike(btn) {
       playCyberBeep(1000, 'sine', 0.06);
-      const favorites = getFavorites();
-      const key = String(productKey);
-      const willLike = !Boolean(favorites[key]);
-      if (willLike) favorites[key] = true;
-      else delete favorites[key];
-      saveFavorites(favorites);
-      applyFavoriteState(btn, willLike);
-      if (willLike) showToast("Ditambahkan ke favorit ★");
+      const countEl = btn.querySelector('.like-count');
+      let currentLikes = parseInt(countEl.innerText);
+      
+      if (btn.classList.contains('liked')) {
+        btn.classList.remove('liked');
+        btn.classList.remove('text-rose-500');
+        btn.classList.add('text-slate-400');
+        countEl.innerText = currentLikes - 1;
+      } else {
+        btn.classList.add('liked');
+        btn.classList.add('text-rose-500');
+        btn.classList.remove('text-slate-400');
+        countEl.innerText = currentLikes + 1;
+        showToast("Terima kasih atas respons positifnya!");
+      }
     }
     function setFilter(type) {
       playCyberBeep(600, 'triangle', 0.04);
@@ -785,13 +760,13 @@
             <div class="flex justify-between items-start mb-2 gap-2">
               <h3 class="font-bold text-slate-100 text-base leading-tight">${item.name}</h3>
               <button 
-                onclick="toggleLike(this, '${favoriteKey(item)}')" 
+                onclick="toggleLike(this)" 
                 class="p-1.5 rounded-lg bg-slate-950/60 hover:bg-slate-800 border border-slate-800 text-slate-400 transition flex items-center gap-1 text-xs shrink-0"
-                title="Favorit produk"
-                aria-label="Favorit produk"
+                title="Sukai produk"
+                aria-label="Sukai produk"
               >
                 <svg class="like-svg w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                  <path d="M20.84 8.74c0 5.14-8.84 10.12-8.84 10.12S3.16 13.88 3.16 8.74A4.74 4.74 0 0 1 12 6.18a4.74 4.74 0 0 1 8.84 2.56Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
                 </svg>
                 <span class="like-count font-bold text-slate-300">0</span>
               </button>
@@ -821,11 +796,6 @@
           </div>
         `;
         container.appendChild(card);
-        const likeButton = card.querySelector('.like-svg')?.closest('button');
-        if (likeButton) {
-          const favorites = getFavorites();
-          applyFavoriteState(likeButton, Boolean(favorites[favoriteKey(item)]));
-        }
       });
     }
 
@@ -900,6 +870,7 @@
       const name = document.getElementById("review-name").value.trim();
       const anonymous = document.getElementById("review-anonymous").checked;
       const rating = parseInt(document.getElementById("review-rating").value, 10);
+      if (rating < 3 || rating > 5) { showToast("Rating hanya 3–5 bintang."); return; }
       const comment = document.getElementById("review-comment").value.trim();
       if (!name || !comment) return;
       const stored = localStorage.getItem("taastore_reviews");
