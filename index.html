@@ -545,7 +545,6 @@
                 <option value="BCA">Bank BCA</option>
                 <option value="DANA">DANA</option>
                 <option value="GOPAY">GoPay</option>
-                <option value="Seabank">Seabank</option>
               </select>
             </div>
             <div class="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 mt-2">
@@ -573,7 +572,7 @@
           </div>
           <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 mb-4">
             <div class="text-xs text-slate-400">Rate Take</div>
-            <div id="sell-rate-masked" class="text-lg font-black text-amber-400">Rp **.***</div>
+            <div id="sell-rate-masked" class="text-lg font-black text-amber-400">Rp 4**.***</div>
             <p class="text-[10px] text-slate-500 mt-1">Rate lengkap dikonfirmasi langsung oleh Admin melalui WhatsApp sebelum kamu melanjutkan.</p>
           </div>
           <form onsubmit="submitSellRequest(event)" class="space-y-3">
@@ -1105,13 +1104,14 @@
       list.innerHTML = valid.map(({order}) => {
         const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
         const done = order.status === 'COMPLETED';
-        const cancelled = order.status === 'SELL_CANCELLED';
+        const sellStatus = order.sell_status || order.status;
+        const cancelled = isSell && sellStatus === 'SELL_CANCELLED';
         const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : cancelled ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
         const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN'};
-        const statusText = done ? 'SELESAI' : (isSell ? (sellStatusMap[order.status] || 'MENUNGGU') : 'MENUNGGU');
+        const statusText = done ? 'SELESAI' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : 'MENUNGGU');
         let reviewBtn = done ? `<button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan order.</span>';
-        if (isSell && order.status === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
-        if (isSell && order.status === 'SELL_WAITING_DROP') reviewBtn = `<label class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer">📷 Upload Bukti Drop<input type="file" accept="image/*" class="hidden" onchange="uploadSellProof('${escapeReviewText(order.order_id)}', this)"></label>`;
+        if (isSell && sellStatus === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
+        if (isSell && sellStatus === 'SELL_WAITING_DROP') reviewBtn = `<label class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer">📷 Upload Bukti Drop<input type="file" accept="image/*" class="hidden" onchange="uploadSellProof('${escapeReviewText(order.order_id)}', this)"></label>`;
         return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(order.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span></div>
@@ -1263,30 +1263,30 @@
       const note = document.getElementById('sell-note').value.trim();
       const orderId = makeOrderId();
       // World Drop is intentionally controlled by Admin and is not entered by the seller.
-      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', status: 'SELL_WAITING_CONFIRMATION', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', seller_note: note, sell_proof_data: null };
+      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
       try {
         await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch(err) {
-        showToast('Pengajuan gagal disimpan ke database.', true); console.error(err); return;
+        const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | '); showToast(`Pengajuan gagal disimpan: ${detail || 'cek Supabase'}`, true); console.error('TAASTORE SELL insert error:', err); return;
       }
       const orders=getOrders(); orders.unshift(order); saveOrders(orders); rememberBuyerOrderId(orderId); localStorage.setItem('taastore_last_order_id', orderId);
-      const text = `💰 *PENGAJUAN PENJUALAN TAASTORE*\n----------------------------------------\n• *Order ID*: ${orderId}\n• *Seller*: ${sellerName}\n• *Produk*: ${selectedItem.name}\n• *Jumlah*: ${qty}x\n• *GrowID / ID Game*: ${gameId}\n• *Catatan*: ${note || '-'}\n----------------------------------------\nMohon info *rate Take terbaru*, total yang diterima, dan instruksi *World Drop* untuk order ini. Saya akan menentukan lanjut atau batal setelah mengetahui detail rate.`;
+      const text = `💰 *FORM PENJUALAN TAASTORE*\n━━━━━━━━━━━━━━━━━━━━\n• *Order ID* : ${orderId}\n• *Nama Seller* : ${sellerName}\n• *Produk* : ${selectedItem.name}\n• *Jumlah* : ${qty} BGL/DL\n• *GrowID / ID Game* : ${gameId}\n• *Catatan* : ${note || '-'}\n━━━━━━━━━━━━━━━━━━━━\nMohon info *Rate Take* terbaru dan detail proses penjualan untuk order ini.\n\nTerima kasih! 🙏`;
       window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
       closeSellModal(); showToast(`Pengajuan ${orderId} dibuat. Cek pesanan untuk Setujui atau Batalkan.`); await loadBuyerOrders(); if(isAdmin) await loadAdminOrders();
     }
     async function cancelSellOrder(orderId) {
       const order=await getOrderById(orderId);
-      if(!order || order.order_type!=='SELL' || order.status!=='SELL_WAITING_CONFIRMATION') return;
+      if(!order || order.order_type!=='SELL' || (order.sell_status || order.status)!=='SELL_WAITING_CONFIRMATION') return;
       if(!confirm(`Batalkan pengajuan ${orderId}?`)) return;
-      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({status:'SELL_CANCELLED'})}); } catch(err){ showToast('Gagal membatalkan pengajuan.',true); return; }
-      const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].status='SELL_CANCELLED';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast(`Pengajuan ${orderId} dibatalkan.`);
+      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_status:'SELL_CANCELLED'})}); } catch(err){ showToast('Gagal membatalkan pengajuan.',true); return; }
+      const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_status='SELL_CANCELLED';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast(`Pengajuan ${orderId} dibatalkan.`);
     }
     async function agreeSellOrder(orderId) {
       const order=await getOrderById(orderId);
-      if(!order || order.order_type!=='SELL' || order.status!=='SELL_WAITING_CONFIRMATION') return;
+      if(!order || order.order_type!=='SELL' || (order.sell_status || order.status)!=='SELL_WAITING_CONFIRMATION') return;
       if(!confirm('Saya sudah mengetahui dan menyetujui rate dari Admin. Lanjutkan ke tahap drop?')) return;
-      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({status:'SELL_WAITING_DROP'})}); } catch(err){ showToast('Gagal melanjutkan penjualan.',true); return; }
-      const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].status='SELL_WAITING_DROP';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast('Penjualan dilanjutkan. Silakan lakukan drop lalu upload bukti.');
+      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_status:'SELL_WAITING_DROP'})}); } catch(err){ showToast('Gagal melanjutkan penjualan.',true); return; }
+      const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_status='SELL_WAITING_DROP';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast('Penjualan dilanjutkan. Silakan lakukan drop lalu upload bukti.');
     }
     async function uploadSellProof(orderId, input) {
       const file=input?.files?.[0]; if(!file) return;
@@ -1295,8 +1295,8 @@
         try {
           const img=new Image(); img.onload=async()=>{
             const c=document.createElement('canvas'); const max=1400; const scale=Math.min(1,max/Math.max(img.width,img.height)); c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale); const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,c.width,c.height); const data=c.toDataURL('image/jpeg',0.78);
-            await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_proof_data:data,status:'SELL_PROOF_SUBMITTED'})});
-            const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_proof_data=data;local[i].status='SELL_PROOF_SUBMITTED';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast('Bukti drop berhasil dikirim ke Admin.');
+            await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_proof_data:data,sell_status:'SELL_PROOF_SUBMITTED'})});
+            const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_proof_data=data;local[i].sell_status='SELL_PROOF_SUBMITTED';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast('Bukti drop berhasil dikirim ke Admin.');
           }; img.src=reader.result;
         } catch(err){showToast('Gagal mengunggah bukti drop.',true);console.error(err);} } ; reader.readAsDataURL(file);
     }
@@ -1374,6 +1374,52 @@
       showToast(`Order ${orderId} dibuat. Order ID tersimpan otomatis.`);
       if (isAdmin) await loadAdminOrders();
     }
+    function sellStatusLabel(order) {
+      if (order.status === 'COMPLETED' || order.sell_status === 'SELL_COMPLETED') return 'SELESAI';
+      if (order.sell_status === 'SELL_CANCELLED') return 'DIBATALKAN';
+      if (order.sell_status === 'SELL_WAITING_DROP') return 'MENUNGGU DROP';
+      return 'MENUNGGU KONFIRMASI';
+    }
+    function buildAdminWhatsAppText(order, kind) {
+      const id = order.order_id || '-';
+      const product = order.product || '-';
+      const qty = Number(order.qty) || 0;
+      const world = order.world || '-';
+      const payment = order.payment || '-';
+      if (order.order_type === 'SELL') {
+        if (kind === 'rate') {
+          const rate = prompt(`Masukkan Rate Take untuk ${id}:`, '');
+          if (!rate) return null;
+          const rateNum = Number(String(rate).replace(/[^0-9]/g,'')) || 0;
+          const total = rateNum * qty;
+          return `Halo kak 👋\n\nTerima kasih sudah mengajukan penjualan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💰 Rate Take: Rp ${rateNum.toLocaleString('id-ID')} / BGL/DL\n💵 Total Pembayaran: Rp ${total.toLocaleString('id-ID')}\n━━━━━━━━━━━━━━━━━━━━\n\nMohon dicek kembali rate dan total pembayarannya ya kak.\n\nJika sudah sesuai dan ingin melanjutkan, silakan konfirmasi kepada kami.\n\nJika rate kurang sesuai, pengajuan dapat dibatalkan tanpa perlu melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        if (kind === 'payment') {
+          return `Halo kak 👋\n\nUntuk Order ID *${id}*, penjualan akan kami lanjutkan.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n\nUntuk pembayaran, kakak ingin menerima melalui metode apa?\n\nSilakan informasikan metode pembayaran beserta detail penerimaannya ya kak.\n\nSetelah itu kami berikan instruksi World Drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        if (kind === 'drop') {
+          return `Halo kak 👋\n\nOrder ID *${id}* sudah siap untuk proses drop.\n\n━━━━━━━━━━━━━━━━━━━━\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n🌎 World: [ISI WORLD ADMIN]\n📦 Tempat: Display Box\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan drop sesuai instruksi di atas.\n\nSetelah selesai, silakan kirim screenshot sebagai bukti ya kak.\n\nMohon pastikan produk dan jumlahnya sesuai sebelum melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        if (kind === 'received') {
+          return `Halo kak 👋\n\n✅ Drop untuk Order ID *${id}* sudah kami terima dan verifikasi.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n\nPembayaran akan kami proses sesuai metode pembayaran yang telah dikonfirmasi.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nPembayaran telah kami proses.\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
+      }
+      if (kind === 'payment') {
+        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran dilakukan, silakan kirim bukti pembayaran melalui chat ini.\n\nTerima kasih 🙏\n— TAASTORE`;
+      }
+      if (kind === 'paid') return `Halo kak 👋\n\n✅ Pembayaran untuk Order ID *${id}* sudah kami terima.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
+      if (kind === 'ready') return `Halo kak 👋\n\n✅ Pesanan Order ID *${id}* sudah siap.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nSilakan datang ke:\n🌎 World: ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
+      return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
+    }
+    function openAdminWhatsApp(orderId, kind) {
+      if (!isAdmin) return;
+      const order = getOrders().find(o => String(o.order_id) === String(orderId));
+      if (!order) { showToast('Detail order tidak ditemukan di perangkat admin.', true); return; }
+      const text = buildAdminWhatsAppText(order, kind);
+      if (!text) return;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    }
     async function loadAdminOrders() {
       const panel = document.getElementById("admin-orders-panel");
       const list = document.getElementById("admin-orders-list");
@@ -1385,20 +1431,41 @@
       if (!Array.isArray(orders) || !orders.length) {
         list.innerHTML = '<p class="text-xs text-slate-500 py-4">Belum ada pesanan tersimpan.</p>'; return;
       }
-      list.innerHTML = orders.map((o, i) => `
-        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${o.status === 'COMPLETED' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : 'border-amber-700/50 text-amber-300 bg-amber-950/30'}">${o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU'}</span></div>
-          <p class="text-xs text-slate-300 mt-1">${escapeReviewText(o.buyer_name)} · ${escapeReviewText(o.product)} · ${o.qty}x · ${o.order_type === 'SELL' ? 'SELL' : `Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
-          <p class="text-[10px] text-slate-500 mt-1">GrowID: ${escapeReviewText(o.grow_id)} · World: ${escapeReviewText(o.world)} · ${escapeReviewText(o.payment)}</p>
-          ${o.order_type === 'SELL' && o.sell_proof_data ? `<a href="${o.sell_proof_data}" target="_blank" class="text-[10px] text-cyan-300 underline">Lihat Bukti Drop</a>` : ''}</div>
-          ${o.status === 'COMPLETED' ? '<span class="text-[10px] text-emerald-400 font-semibold">✓ Selesai</span>' : `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold border border-emerald-500/30">${o.order_type === 'SELL' ? 'Tandai Selesai / Bayar' : 'Tandai Order Selesai'}</button>`}
-        </div>`).join('');
+      const local = getOrders();
+      orders.forEach(o => { const i = local.findIndex(x => x.order_id === o.order_id); if (i >= 0) local[i] = {...local[i], ...o}; else local.unshift(o); });
+      saveOrders(local);
+      list.innerHTML = orders.map((o) => {
+        const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
+        const statusText = isSell ? sellStatusLabel(o) : (o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU');
+        const statusClass = statusText === 'SELESAI' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : statusText === 'DIBATALKAN' ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
+        let buttons = '';
+        if (isSell) {
+          if (statusText === 'MENUNGGU KONFIRMASI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','rate')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💬 Konfirmasi Rate</button>`;
+          if (statusText === 'MENUNGGU DROP') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💳 Tanya Payment</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','drop')" class="text-[10px] px-2.5 py-2 rounded-lg bg-cyan-600/80 text-white font-bold">📦 Instruksi Drop</button>`;
+          if (o.sell_proof_data) buttons += `<a href="${o.sell_proof_data}" target="_blank" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📷 Bukti</a><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','received')" class="text-[10px] px-2.5 py-2 rounded-lg border border-blue-500/30 text-blue-300">💬 Drop Diterima</button>`;
+          if (statusText !== 'DIBATALKAN' && statusText !== 'SELESAI') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai / Bayar</button>`;
+          if (statusText === 'SELESAI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+        } else {
+          if (o.status !== 'COMPLETED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💳 Kirim Pembayaran</button><button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai</button>`;
+          else buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+        }
+        return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
+          <p class="text-xs text-slate-300 mt-1">${escapeReviewText(o.buyer_name)} · ${escapeReviewText(o.product)} · ${o.qty}x · ${isSell ? 'Penjualan ke TAASTORE' : `Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
+          <p class="text-[10px] text-slate-500 mt-1">GrowID: ${escapeReviewText(o.grow_id)} · ${isSell ? 'Payment: akan dikonfirmasi' : `World: ${escapeReviewText(o.world)} · ${escapeReviewText(o.payment)}`}</p>
+          ${isSell && o.sell_proof_data ? `<a href="${o.sell_proof_data}" target="_blank" class="text-[10px] text-cyan-300 underline">Lihat Bukti Drop</a>` : ''}</div>
+          <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}</div>
+        </div>`;
+      }).join('');
     }
     async function completeOrder(orderId) {
       if (!isAdmin || !orderId) return;
       try {
-        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: "PATCH", headers: { "Prefer": "return=minimal" }, body: JSON.stringify({ status: "COMPLETED", completed_at: new Date().toISOString() }) });
-        const local = getOrders(); const idx = local.findIndex(o => o.order_id === orderId); if (idx >= 0) { local[idx].status = "COMPLETED"; local[idx].completed_at = new Date().toISOString(); saveOrders(local); }
+        const existing = getOrders().find(o=>o.order_id===orderId) || {};
+        const patch = { status: "COMPLETED", completed_at: new Date().toISOString() };
+        if (existing.order_type === 'SELL') patch.sell_status = 'SELL_COMPLETED';
+        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: "PATCH", headers: { "Prefer": "return=minimal" }, body: JSON.stringify(patch) });
+        const local = getOrders(); const idx = local.findIndex(o => o.order_id === orderId); if (idx >= 0) { Object.assign(local[idx], patch); saveOrders(local); }
         await loadAdminOrders(); await loadBuyerOrders(); showToast(`Order ${orderId} ditandai selesai.`);
       } catch (err) {
         const detail = [err.message, err.code ? `code: ${err.code}` : "", err.hint ? `hint: ${err.hint}` : ""].filter(Boolean).join(" | ");
