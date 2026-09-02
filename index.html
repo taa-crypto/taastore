@@ -370,6 +370,15 @@
             <i class="fa-brands fa-instagram text-sm"></i>
             <span class="hidden sm:inline">Instagram</span>
           </a>
+          <!-- Keranjang -->
+          <button type="button" onclick="openCartView()" title="Keranjang" class="relative flex items-center gap-2 px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-lg text-xs font-semibold transition">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 1.9-1.4L21 8H6.2"/>
+              <circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/>
+            </svg>
+            <span class="hidden sm:inline">Keranjang</span>
+            <span id="cart-count-badge" class="hidden min-w-4 h-4 px-1 rounded-full bg-amber-500 text-slate-950 text-[9px] font-black items-center justify-center">0</span>
+          </button>
           <!-- Admin Button -->
           <button id="admin-btn" onclick="toggleAdminPanel()" class="bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition">
             Admin Login
@@ -503,29 +512,23 @@
       </section>
     </div>
     
-    <!-- Modal Checkout Form Beranimasi Glassmorphism + Gradient Border -->
+    <!-- Modal Keranjang + Checkout -->
     <div id="cart-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 z-50">
-      <div class="animated-border p-[2px] rounded-3xl max-w-md w-full shadow-2xl modal-scale-up">
-        <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-6 relative overflow-hidden">
+      <div class="animated-border p-[2px] rounded-3xl max-w-lg w-full shadow-2xl modal-scale-up">
+        <div class="animated-border-content bg-slate-900/95 backdrop-blur-md rounded-3xl p-5 relative overflow-y-auto max-h-[92vh]">
           <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
             <div class="flex items-center gap-2">
-              <img src="assets/logo.jpg" alt="Logo" class="w-6 h-6 rounded-md">
-              <h3 class="font-bold text-lg text-amber-400" id="cart-item-name">Detail Pesanan</h3>
+              <svg viewBox="0 0 24 24" class="w-5 h-5 text-cyan-300" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 1.9-1.4L21 8H6.2"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
+              <h3 class="font-black text-lg text-amber-400">Keranjang</h3>
             </div>
-            <button onclick="closeCartModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+            <button type="button" onclick="closeCartModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
           </div>
-          
-          <form onsubmit="sendToWA(event)" class="space-y-3">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs text-slate-400 mb-1 block">Harga Satuan</label>
-                <div class="text-base font-bold text-white" id="cart-item-price">Rp 0</div>
-              </div>
-              <div>
-                <label class="text-xs text-slate-400 mb-1 block">Jumlah / Qty</label>
-                <input type="number" id="cart-qty" min="1" value="1" oninput="calculateTotal()" required class="w-full bg-slate-950/80 border border-slate-800 p-2 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
-              </div>
-            </div>
+          <div id="cart-items-list" class="space-y-2 mb-4"></div>
+          <div class="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 mb-4">
+            <div class="flex justify-between text-xs text-slate-400"><span>Total Item</span><span id="cart-total-items">0</span></div>
+            <div class="flex justify-between items-end mt-1"><span class="text-xs text-slate-400">Total Pembayaran</span><span class="text-2xl font-black text-amber-400" id="cart-total-price">Rp 0</span></div>
+          </div>
+          <form id="cart-checkout-form" onsubmit="sendToWA(event)" class="space-y-3">
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Nama Pembeli</label>
               <input type="text" id="buyer-name" placeholder="Masukkan nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
@@ -536,31 +539,16 @@
               <p class="text-[10px] text-slate-500 mt-1">Pastikan nomor WhatsApp aktif untuk konfirmasi pesanan.</p>
             </div>
             <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
-                <input type="text" id="buyer-game-id" placeholder="Contoh: Azka07" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
-              </div>
-              <div>
-                <label class="text-xs text-slate-400 mb-1 block">World Name</label>
-                <input type="text" id="buyer-world" placeholder="Contoh: TAASTORE" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
-              </div>
+              <div><label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label><input type="text" id="buyer-game-id" placeholder="Contoh: Azka07" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400"></div>
+              <div><label class="text-xs text-slate-400 mb-1 block">World Name</label><input type="text" id="buyer-world" placeholder="Contoh: TAASTORE" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400"></div>
             </div>
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Metode Pembayaran</label>
               <select id="buyer-payment" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
-                <option value="QRIS">QRIS All Payment</option>
-                <option value="BCA">Bank BCA</option>
-                <option value="DANA">DANA</option>
-                <option value="GOPAY">GoPay</option>
+                <option value="QRIS">QRIS All Payment</option><option value="BCA">Bank BCA</option><option value="DANA">DANA</option><option value="GOPAY">GoPay</option>
               </select>
             </div>
-            <div class="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 mt-2">
-              <div class="text-xs text-slate-400 mb-0.5">Total Pembayaran:</div>
-              <div class="text-2xl font-black text-amber-400" id="cart-total-price">Rp 0</div>
-            </div>
-            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-2xl transition mt-2 shadow-lg shadow-amber-500/20">
-              Lanjut Pembayaran
-            </button>
+            <button id="cart-checkout-btn" type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-2xl transition mt-2 shadow-lg shadow-amber-500/20">Lanjut Pembayaran</button>
           </form>
         </div>
       </div>
@@ -718,6 +706,8 @@
     let itemsData = [];
     let activeFilter = 'all';
     let selectedItem = null;
+    let cartItems = [];
+    const CART_KEY = "taastore_cart_v1";
     const defaultReviews = [];
     const ORDERS_KEY = "taastore_orders_v1";
     const ADMIN_SESSION_KEY = "taastore_admin_session_v1";
@@ -1030,7 +1020,7 @@
               ${isOut && !isJualItem(item) ? 'disabled' : ''} 
               class="w-full text-center ${isOut && !isJualItem(item) ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10'} font-bold py-2.5 px-4 rounded-xl transition duration-200"
             >
-              ${isJualItem(item) ? 'Ajukan Penjualan' : (isOut ? 'Stok Habis' : 'Pesan Sekarang')}
+              ${isJualItem(item) ? 'Ajukan Penjualan' : (isOut ? 'Stok Habis' : 'Tambah ke Keranjang')}
             </button>
             ${isAdmin ? `
               <div class="flex gap-2 mt-3 pt-3 border-t border-slate-800">
@@ -1184,7 +1174,7 @@
         return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(order.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span></div>
-            <p class="text-xs text-slate-300 mt-1">${escapeReviewText(order.product)} · ${Number(order.qty)||0}x · ${isSell ? 'Penjualan ke TAASTORE' : `Rp ${Number(order.total||0).toLocaleString('id-ID')}`}</p>
+            <p class="text-xs text-slate-300 mt-1">${escapeReviewText(isSell ? `${Number(order.qty)||0} ${getProductUnit(order.product)}` : formatOrderItems(order)).replace(/\n/g,' · ')} · ${isSell ? 'Penjualan ke TAASTORE' : `Rp ${Number(order.total||0).toLocaleString('id-ID')}`}</p>
             <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(order.payment)} · ${escapeReviewText(order.world)}</p>
           </div>
           <div class="shrink-0">${reviewBtn}</div>
@@ -1384,28 +1374,68 @@
         } catch(err){showToast('Gagal mengunggah bukti drop.',true);console.error(err);} } ; reader.readAsDataURL(file);
     }
 
-    function openCartModal(id) {
-
+    function getProductUnit(name) {
+      const n = String(name || '').toLowerCase();
+      if (n.includes('blue gem lock') || n === 'bgl') return 'BGL';
+      if (n.includes('diamond lock') || n === 'dl') return 'DL';
+      return 'unit';
+    }
+    function loadCart() {
+      try { const raw = localStorage.getItem(CART_KEY); const parsed = raw ? JSON.parse(raw) : []; cartItems = Array.isArray(parsed) ? parsed : []; } catch (_) { cartItems = []; }
+      updateCartUI();
+      return cartItems;
+    }
+    function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(cartItems)); } catch (_) {} updateCartUI(); }
+    function cartTotal() { return cartItems.reduce((sum, item) => sum + (Number(item.unit_price)||0) * (Number(item.qty)||0), 0); }
+    function cartQtyTotal() { return cartItems.reduce((sum, item) => sum + (Number(item.qty)||0), 0); }
+    function addToCart(id) {
+      const item = itemsData.find(i => String(i.id) === String(id));
+      if (!item || isJualItem(item)) return;
+      const existing = cartItems.find(i => String(i.product_id) === String(item.id));
+      if (existing) existing.qty = Math.max(1, Number(existing.qty)||1) + 1;
+      else cartItems.push({ product_id: item.id, product: item.name, qty: 1, unit_price: Number(item.price)||0, image_url: item.image_url || '' });
+      saveCart();
       playCyberBeep(900, 'sine', 0.06);
-      selectedItem = itemsData.find(i => i.id === id);
-      if (!selectedItem) return;
-      document.getElementById("cart-item-name").innerText = selectedItem.name;
-      document.getElementById("cart-item-price").innerText = `Rp ${selectedItem.price.toLocaleString('id-ID')}`;
-      document.getElementById("cart-qty").value = 1;
-      calculateTotal();
-      document.getElementById("cart-modal").classList.remove("hidden");
+      openCartView();
+      showToast(`${item.name} ditambahkan ke keranjang.`);
     }
-    function closeCartModal() {
-      playCyberBeep(350, 'sine', 0.04);
-      document.getElementById("cart-modal").classList.add("hidden");
-      selectedItem = null;
+    function changeCartQty(productId, delta) {
+      const item = cartItems.find(i => String(i.product_id) === String(productId));
+      if (!item) return;
+      item.qty = Math.max(1, (Number(item.qty)||1) + Number(delta));
+      saveCart();
     }
-    function calculateTotal() {
-      if (!selectedItem) return;
-      const qty = parseInt(document.getElementById("cart-qty").value) || 1;
-      const total = selectedItem.price * qty;
-      document.getElementById("cart-total-price").innerText = `Rp ${total.toLocaleString('id-ID')}`;
+    function setCartQty(productId, value) {
+      const item = cartItems.find(i => String(i.product_id) === String(productId));
+      if (!item) return;
+      item.qty = Math.max(1, parseInt(value)||1); saveCart();
     }
+    function removeCartItem(productId) { cartItems = cartItems.filter(i => String(i.product_id) !== String(productId)); saveCart(); }
+    function updateCartUI() {
+      const badge = document.getElementById('cart-count-badge');
+      const count = cartQtyTotal();
+      if (badge) { badge.textContent = count; badge.classList.toggle('hidden', count <= 0); badge.classList.toggle('inline-flex', count > 0); }
+      const list = document.getElementById('cart-items-list');
+      if (!list) return;
+      if (!cartItems.length) { list.innerHTML = '<div class="text-center py-7 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">Keranjang masih kosong.</div>'; }
+      else list.innerHTML = cartItems.map(item => {
+        const total = (Number(item.unit_price)||0) * (Number(item.qty)||0);
+        const unit = getProductUnit(item.product);
+        return `<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 flex items-center gap-3">
+          <div class="min-w-0 flex-1"><div class="font-bold text-sm text-white truncate">${escapeReviewText(item.product)}</div><div class="text-[10px] text-slate-500 mt-0.5">${unit} × Rp ${(Number(item.unit_price)||0).toLocaleString('id-ID')}</div></div>
+          <div class="flex items-center gap-1.5"><button type="button" onclick="changeCartQty('${escapeReviewText(item.product_id)}',-1)" class="w-7 h-7 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">−</button><input type="number" min="1" value="${Number(item.qty)||1}" onchange="setCartQty('${escapeReviewText(item.product_id)}',this.value)" class="w-12 h-7 text-center bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"><button type="button" onclick="changeCartQty('${escapeReviewText(item.product_id)}',1)" class="w-7 h-7 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">+</button></div>
+          <div class="text-right w-24"><div class="text-xs font-black text-amber-400">Rp ${total.toLocaleString('id-ID')}</div><button type="button" onclick="removeCartItem('${escapeReviewText(item.product_id)}')" class="text-[10px] text-rose-300 hover:text-rose-200 mt-1">Hapus</button></div>
+        </div>`;
+      }).join('');
+      const totalEl = document.getElementById('cart-total-price'); if (totalEl) totalEl.textContent = `Rp ${cartTotal().toLocaleString('id-ID')}`;
+      const qtyEl = document.getElementById('cart-total-items'); if (qtyEl) qtyEl.textContent = count;
+      const btn = document.getElementById('cart-checkout-btn'); if (btn) btn.disabled = !cartItems.length;
+    }
+    function openCartModal(id) { if (id != null) return addToCart(id); openCartView(); }
+    function openCartView() { loadCart(); document.getElementById('cart-modal')?.classList.remove('hidden'); }
+    function closeCartModal() { playCyberBeep(350, 'sine', 0.04); document.getElementById('cart-modal')?.classList.add('hidden'); selectedItem = null; }
+    function calculateTotal() { updateCartUI(); }
+
     function getOrders() {
       try {
         const raw = localStorage.getItem(ORDERS_KEY);
@@ -1441,43 +1471,30 @@
     async function sendToWA(e) {
       e.preventDefault();
       playCyberBeep(1100, 'square', 0.1);
-      if (!selectedItem) return;
-      const qty = Math.max(1, parseInt(document.getElementById("cart-qty").value) || 1);
-      const total = selectedItem.price * qty;
-      if (total < 10000) { showToast("Minimum order BUY adalah Rp 10.000.", true); return; }
-      const buyerName = document.getElementById("buyer-name").value.trim();
-      const whatsappNumber = normalizeWhatsAppNumber(document.getElementById("buyer-wa").value.trim());
-      if (!whatsappNumber) { showToast("Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.", true); return; }
-      const gameId = document.getElementById("buyer-game-id").value.trim();
-      const world = document.getElementById("buyer-world").value.trim();
-      const payment = document.getElementById("buyer-payment").value;
+      loadCart();
+      if (!cartItems.length) { showToast('Keranjang masih kosong.', true); return; }
+      const total = cartTotal();
+      if (total < 10000) { showToast('Minimum order BUY adalah Rp 10.000.', true); return; }
+      const buyerName = document.getElementById('buyer-name').value.trim();
+      const whatsappNumber = normalizeWhatsAppNumber(document.getElementById('buyer-wa').value.trim());
+      if (!whatsappNumber) { showToast('Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.', true); return; }
+      const gameId = document.getElementById('buyer-game-id').value.trim();
+      const world = document.getElementById('buyer-world').value.trim();
+      const payment = document.getElementById('buyer-payment').value;
       const orderId = makeOrderId();
-      const order = {
-        order_id: orderId, buyer_name: buyerName, product: selectedItem.name, qty, total,
-        grow_id: gameId, world, payment, whatsapp_number: whatsappNumber,
-        status: "WAITING_PAYMENT", created_at: new Date().toISOString(),
-        paid_at: null, completed_at: null, order_type: "BUY", buyer_proof_data: null
-      };
+      const orderItems = cartItems.map(item => ({ product_id: item.product_id, product: item.product, qty: Number(item.qty)||1, unit_price: Number(item.unit_price)||0 }));
+      const productSummary = orderItems.map(item => `${item.qty} ${getProductUnit(item.product)}`).join(' + ');
+      const qtySummary = cartQtyTotal();
+      const order = { order_id: orderId, buyer_name: buyerName, product: productSummary, qty: qtySummary, total, grow_id: gameId, world, payment, whatsapp_number: whatsappNumber, order_items: orderItems, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'BUY', buyer_proof_data: null };
       try {
-        await supabaseRequest("orders", {
-          method: "POST",
-          headers: { "Prefer": "return=minimal" },
-          body: JSON.stringify(order)
-        });
+        await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch (err) {
-        console.error("TAASTORE Supabase order insert error:", err);
-        const detail = [err.message, err.code ? `code: ${err.code}` : "", err.hint ? `hint: ${err.hint}` : ""]
-          .filter(Boolean).join(" | ");
-        showToast(`Order gagal disimpan: ${detail || "cek koneksi Supabase"}`, true);
-        return;
+        console.error('TAASTORE Supabase order insert error:', err);
+        const detail=[err.message,err.code?`code: ${err.code}`:'',err.hint?`hint: ${err.hint}`:''].filter(Boolean).join(' | ');
+        showToast(`Order gagal disimpan: ${detail || 'cek koneksi Supabase'}`, true); return;
       }
-      const orders = getOrders(); orders.unshift(order); saveOrders(orders);
-      localStorage.setItem("taastore_last_order_id", orderId);
-      closeCartModal();
-      await loadBuyerOrders();
-      openPaymentModal(order);
-      showToast(`Order ${orderId} dibuat. Lanjutkan pembayaran di halaman ini.`);
-      if (isAdmin) await loadAdminOrders();
+      const orders=getOrders(); orders.unshift(order); saveOrders(orders); localStorage.setItem('taastore_last_order_id',orderId);
+      cartItems=[]; saveCart(); closeCartModal(); await loadBuyerOrders(); openPaymentModal(order); showToast(`Order ${orderId} dibuat. Lanjutkan pembayaran di halaman ini.`); if(isAdmin) await loadAdminOrders();
     }
     let activePaymentOrderId = null;
     function paymentDetailHtml(method) {
@@ -1506,27 +1523,8 @@
     }
     async function sendBuyerPaymentConfirmation() {
       const id=activePaymentOrderId;if(!id)return;const order=await getOrderById(id);if(!order){showToast('Order tidak ditemukan.',true);return;}if(!order.buyer_proof_data){showToast('Upload bukti pembayaran terlebih dahulu.',true);return;}
-      const unit = /blue gem lock/i.test(order.product||'') ? 'BGL' : /diamond lock/i.test(order.product||'') ? 'DL' : 'unit';
-      const text=`*KONFIRMASI PEMBAYARAN TAASTORE*
-━━━━━━━━━━━━━━━━━━━━
-Order ID : ${order.order_id}
-Nama     : ${order.buyer_name||'-'}
-Produk   : ${order.product||'-'}
-Jumlah   : ${Number(order.qty)||0} ${unit}
-Total    : Rp ${Number(order.total||0).toLocaleString('id-ID')}`
-🎮 *GrowID* : ${order.grow_id||'-'}
-🌎 *World* : ${order.world||'-'}
-💳 *Metode* : ${order.payment||'-'}
-📸 *Bukti* : Sudah diupload di website
-━━━━━━━━━━━━━━━━━━━━
-
-Halo Admin TAASTORE 👋
-
-Saya sudah melakukan pembayaran dan bukti pembayaran sudah saya upload pada halaman order.
-
-Mohon dicek dan diproses.
-
-Terima kasih 🙏`;
+      const itemsText = getOrderItems(order).map(i => `${i.qty} ${getProductUnit(i.product)}`).join('\n');
+      const text=`Halo Admin TAASTORE 👋\n\nSaya sudah melakukan pembayaran untuk Order ID ${order.order_id}.\n\n━━━━━━━━━━━━━━━━━━━━\nOrder ID : ${order.order_id}\n${itemsText ? `Produk\n${itemsText}\n` : `Produk : ${order.product||'-'}\n`}Total : Rp ${Number(order.total||0).toLocaleString('id-ID')}\nGrowID : ${order.grow_id||'-'}\nWorld : ${order.world||'-'}\nMetode Pembayaran : ${order.payment||'-'}\n━━━━━━━━━━━━━━━━━━━━\n\nBukti pembayaran sudah saya upload pada halaman order di website TAASTORE.\n\nMohon dicek dan diproses.\n\nTerima kasih 🙏\n— TAASTORE`;
       window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
     }
 
@@ -1536,38 +1534,32 @@ Terima kasih 🙏`;
       if (order.sell_status === 'SELL_WAITING_DROP') return 'MENUNGGU DROP';
       return 'MENUNGGU KONFIRMASI';
     }
+    function getOrderItems(order) {
+      if (Array.isArray(order?.order_items) && order.order_items.length) return order.order_items;
+      return [{ product: order?.product || '-', qty: Number(order?.qty)||0, unit_price: Number(order?.total||0) / Math.max(1, Number(order?.qty)||1) }];
+    }
+    function formatOrderItems(order, withPrice=false) {
+      return getOrderItems(order).map(item => {
+        const unit=getProductUnit(item.product); const lineTotal=(Number(item.unit_price)||0)*(Number(item.qty)||0);
+        return withPrice ? `${item.qty} ${unit} × Rp ${(Number(item.unit_price)||0).toLocaleString('id-ID')} = Rp ${lineTotal.toLocaleString('id-ID')}` : `${item.qty} ${unit}`;
+      }).join('\n');
+    }
     function buildAdminWhatsAppText(order, kind) {
-      const id = order.order_id || '-';
-      const product = order.product || '-';
-      const qty = Number(order.qty) || 0;
-      const world = order.world || '-';
-      const payment = order.payment || '-';
-      if (order.order_type === 'SELL') {
-        if (kind === 'rate') {
-          const rate = prompt(`Masukkan Rate Take untuk ${id}:`, '');
-          if (!rate) return null;
-          const rateNum = Number(String(rate).replace(/[^0-9]/g,'')) || 0;
-          const total = rateNum * qty;
-          return `Halo kak 👋\n\nTerima kasih sudah mengajukan penjualan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💰 Rate Take: Rp ${rateNum.toLocaleString('id-ID')} / BGL/DL\n💵 Total Pembayaran: Rp ${total.toLocaleString('id-ID')}\n━━━━━━━━━━━━━━━━━━━━\n\nMohon dicek kembali rate dan total pembayarannya ya kak.\n\nJika sudah sesuai dan ingin melanjutkan, silakan konfirmasi kepada kami.\n\nJika rate kurang sesuai, pengajuan dapat dibatalkan tanpa perlu melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
-        }
-        if (kind === 'payment') {
-          return `Halo kak 👋\n\nUntuk Order ID *${id}*, penjualan akan kami lanjutkan.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n\nUntuk pembayaran, kakak ingin menerima melalui metode apa?\n\nSilakan informasikan metode pembayaran beserta detail penerimaannya ya kak.\n\nSetelah itu kami berikan instruksi World Drop.\n\nTerima kasih 🙏\n— TAASTORE`;
-        }
-        if (kind === 'drop') {
-          return `Halo kak 👋\n\nOrder ID *${id}* sudah siap untuk proses drop.\n\n━━━━━━━━━━━━━━━━━━━━\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n🌎 World: [ISI WORLD ADMIN]\n📦 Tempat: Display Box\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan drop sesuai instruksi di atas.\n\nSetelah selesai, silakan kirim screenshot sebagai bukti ya kak.\n\nMohon pastikan produk dan jumlahnya sesuai sebelum melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
-        }
-        if (kind === 'received') {
-          return `Halo kak 👋\n\n✅ Drop untuk Order ID *${id}* sudah kami terima dan verifikasi.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n\nPembayaran akan kami proses sesuai metode pembayaran yang telah dikonfirmasi.\n\nTerima kasih 🙏\n— TAASTORE`;
-        }
-        return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nPembayaran telah kami proses.\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
+      const id=order.order_id||'-'; const product=order.product||'-'; const qty=Number(order.qty)||0; const world=order.world||'-'; const payment=order.payment||'-';
+      const itemLines=formatOrderItems(order);
+      const unitLines=itemLines || `${qty} ${getProductUnit(product)}`;
+      if(order.order_type==='SELL') {
+        const unit=getProductUnit(product);
+        if(kind==='rate') { const rate=prompt(`Masukkan Rate Take untuk ${id}:`,''); if(!rate)return null; const rateNum=Number(String(rate).replace(/[^0-9]/g,''))||0; const total=rateNum*qty; return `Halo kak 👋\n\nTerima kasih sudah mengajukan penjualan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\nOrder ID : ${id}\nProduk : ${product}\nJumlah : ${qty} ${unit}\nRate Take : Rp ${rateNum.toLocaleString('id-ID')} / ${unit}\nTotal Pembayaran : Rp ${total.toLocaleString('id-ID')}\n━━━━━━━━━━━━━━━━━━━━\n\nMohon dicek kembali rate dan total pembayarannya.\n\nJika sudah sesuai dan ingin melanjutkan, silakan konfirmasi kepada kami.\n\nTerima kasih 🙏\n— TAASTORE`; }
+        if(kind==='payment') return `Halo kak 👋\n\nUntuk Order ID ${id}, penjualan akan kami lanjutkan.\n\n━━━━━━━━━━━━━━━━━━━━\nProduk : ${product}\nJumlah : ${qty} ${unit}\n━━━━━━━━━━━━━━━━━━━━\n\nUntuk pembayaran, kakak ingin menerima melalui metode apa?\n\nSetelah itu kami berikan instruksi World Drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        if(kind==='drop') return `Halo kak 👋\n\nOrder ID ${id} sudah siap untuk proses drop.\n\n━━━━━━━━━━━━━━━━━━━━\nProduk : ${product}\nJumlah : ${qty} ${unit}\nWorld : [ISI WORLD ADMIN]\nTempat : Display Box\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan drop sesuai instruksi di atas.\nSetelah selesai, silakan upload screenshot sebagai bukti pada halaman order.\n\nTerima kasih 🙏\n— TAASTORE`;
+        if(kind==='received') return `Halo kak 👋\n\nDrop untuk Order ID ${id} sudah kami terima dan verifikasi.\n\nProduk : ${product}\nJumlah : ${qty} ${unit}\n\nPembayaran akan kami proses sesuai metode yang telah dikonfirmasi.\n\nTerima kasih 🙏\n— TAASTORE`;
+        return `Halo kak 👋\n\nTransaksi Order ID ${id} sudah selesai.\n\nProduk : ${product}\nJumlah : ${qty} ${unit}\n\nPembayaran telah kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
       }
-      if (kind === 'payment') {
-        const unit = /blue gem lock/i.test(product) ? 'BGL' : /diamond lock/i.test(product) ? 'DL' : 'unit';
-        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\nOrder ID : ${id}\nProduk   : ${product}\nJumlah   : ${qty} ${unit}\nTotal    : Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nMetode Pembayaran : ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan lakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE.\nSetelah bukti berhasil diupload, gunakan tombol \"Konfirmasi via WhatsApp\".\n\nTerima kasih 🙏\n— TAASTORE`;
-      }
-      if (kind === 'paid') return `Halo kak 👋\n\n✅ Pembayaran untuk Order ID *${id}* sudah kami terima.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
-      if (kind === 'ready') return `Halo kak 👋\n\n✅ Pesanan Order ID *${id}* sudah siap.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nSilakan datang ke:\n🌎 World: ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
-      return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
+      if(kind==='payment') return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\nOrder ID : ${id}\nProduk\n${unitLines}\nTotal : Rp ${Number(order.total||0).toLocaleString('id-ID')}\nMetode Pembayaran : ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan lakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE. Setelah bukti berhasil diupload, gunakan tombol "Konfirmasi via WhatsApp".\n\nTerima kasih 🙏\n— TAASTORE`;
+      if(kind==='paid') return `Halo kak 👋\n\nPembayaran untuk Order ID ${id} sudah kami terima.\n\nProduk\n${unitLines}\nTotal : Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
+      if(kind==='ready') return `Halo kak 👋\n\nPesanan Order ID ${id} sudah siap.\n\nProduk\n${unitLines}\n\nSilakan datang ke:\nWorld : ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
+      return `Halo kak 👋\n\nTransaksi Order ID ${id} sudah selesai.\n\nProduk\n${unitLines}\nTotal : Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
     }
     function openAdminWhatsApp(orderId, kind) {
       if (!isAdmin) return;
@@ -1635,15 +1627,28 @@ Terima kasih 🙏`;
       }
       const wa = getOrderWhatsApp(o);
       const customerLabel = isSell ? (o.buyer_name || '-') : (o.buyer_name || '-');
+      const itemDisplay = isSell ? `${Number(o.qty)||0} ${getProductUnit(o.product)}` : formatOrderItems(o);
+      const historyDelete = adminOrderIsHistory(o) ? `<button type="button" onclick="deleteHistoryOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10">🗑️ Hapus Riwayat</button>` : '';
       return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold text-slate-500 font-mono">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
-          <p class="text-xs text-slate-200 mt-1 font-semibold">${escapeReviewText(o.product)} · ${Number(o.qty)||0}x ${isSell ? '' : `· Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
+          <p class="text-xs text-slate-200 mt-1 font-semibold">${escapeReviewText(itemDisplay).replace(/\n/g,' · ')} ${isSell ? '' : `· Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
           <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(customerLabel)} · GrowID: ${escapeReviewText(o.grow_id || '-')} · ${wa ? 'WA terhubung' : 'WA belum tersimpan'}</p>
           ${isSell && o.sell_proof_data ? `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-cyan-300 underline mt-1">Lihat Bukti Drop</button>` : ''}
         </div>
-        <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}</div>
+        <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}${historyDelete}</div>
       </div>`;
+    }
+
+    async function deleteHistoryOrder(orderId) {
+      if (!isAdmin || !orderId) return;
+      const order = getOrders().find(o => String(o.order_id) === String(orderId));
+      if (!order || !adminOrderIsHistory(order)) { showToast('Hanya riwayat pesanan yang bisa dihapus.', true); return; }
+      if (!confirm(`Hapus riwayat ${orderId} secara permanen?`)) return;
+      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method:'DELETE', headers:{'Prefer':'return=minimal'} }); }
+      catch(err) { showToast(`Gagal menghapus ${orderId}: ${err.message || 'cek izin database.'}`, true); return; }
+      saveOrders(getOrders().filter(o => String(o.order_id) !== String(orderId)));
+      await loadAdminOrders(); await loadBuyerOrders(); showToast(`Riwayat ${orderId} dihapus.`);
     }
 
     async function loadAdminOrders() {
