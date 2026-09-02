@@ -1506,13 +1506,14 @@
     }
     async function sendBuyerPaymentConfirmation() {
       const id=activePaymentOrderId;if(!id)return;const order=await getOrderById(id);if(!order){showToast('Order tidak ditemukan.',true);return;}if(!order.buyer_proof_data){showToast('Upload bukti pembayaran terlebih dahulu.',true);return;}
-      const text=`🧾 *KONFIRMASI PEMBAYARAN TAASTORE*
+      const unit = /blue gem lock/i.test(order.product||'') ? 'BGL' : /diamond lock/i.test(order.product||'') ? 'DL' : 'unit';
+      const text=`*KONFIRMASI PEMBAYARAN TAASTORE*
 ━━━━━━━━━━━━━━━━━━━━
-🆔 *Order ID* : ${order.order_id}
-👤 *Nama* : ${order.buyer_name||'-'}
-📦 *Produk* : ${order.product||'-'}
-🔢 *Jumlah* : ${Number(order.qty)||0}x
-💰 *Total* : Rp ${Number(order.total||0).toLocaleString('id-ID')}
+Order ID : ${order.order_id}
+Nama     : ${order.buyer_name||'-'}
+Produk   : ${order.product||'-'}
+Jumlah   : ${Number(order.qty)||0} ${unit}
+Total    : Rp ${Number(order.total||0).toLocaleString('id-ID')}`
 🎮 *GrowID* : ${order.grow_id||'-'}
 🌎 *World* : ${order.world||'-'}
 💳 *Metode* : ${order.payment||'-'}
@@ -1561,7 +1562,8 @@ Terima kasih 🙏`;
         return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nPembayaran telah kami proses.\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
       }
       if (kind === 'payment') {
-        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE, lalu gunakan tombol Konfirmasi via WhatsApp.\n\nTerima kasih 🙏\n— TAASTORE`;
+        const unit = /blue gem lock/i.test(product) ? 'BGL' : /diamond lock/i.test(product) ? 'DL' : 'unit';
+        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\nOrder ID : ${id}\nProduk   : ${product}\nJumlah   : ${qty} ${unit}\nTotal    : Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nMetode Pembayaran : ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan lakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE.\nSetelah bukti berhasil diupload, gunakan tombol \"Konfirmasi via WhatsApp\".\n\nTerima kasih 🙏\n— TAASTORE`;
       }
       if (kind === 'paid') return `Halo kak 👋\n\n✅ Pembayaran untuk Order ID *${id}* sudah kami terima.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
       if (kind === 'ready') return `Halo kak 👋\n\n✅ Pesanan Order ID *${id}* sudah siap.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nSilakan datang ke:\n🌎 World: ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
