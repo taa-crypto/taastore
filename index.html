@@ -853,6 +853,32 @@
           if (!Array.isArray(freshItems)) throw new Error("Format data barang tidak valid");
 
           itemsData = freshItems;
+          // Stock quantity is sourced directly from Supabase so the Admin Panel
+          // and customer catalog stay in sync even if the legacy backend /items
+          // endpoint does not yet expose the new column.
+          try {
+            const stockRows = await supabaseRequest('items?select=id,stock_quantity,stock_status');
+            if (Array.isArray(stockRows)) {
+              const stockMap = new Map(stockRows.map(r => [String(r.id), r]));
+              itemsData = freshItems.map(it => {
+                const row = stockMap.get(String(it.id));
+                return row ? { ...it, stock_quantity: row.stock_quantity, stock_status: row.stock_status || it.stock_status } : it;
+              });
+            }
+          } catch (stockErr) {
+            console.warn('TAASTORE stock sync read skipped:', stockErr);
+          }
+          try {
+            const overrides = getStockOverrides();
+            let changed = false;
+            freshItems.forEach(it => {
+              const raw = it?.stock_quantity ?? it?.stock_qty ?? it?.stock ?? it?.quantity;
+              if (raw !== undefined && raw !== null && raw !== '' && Number.isFinite(Number(raw))) {
+                if (Object.prototype.hasOwnProperty.call(overrides, String(it.id))) { delete overrides[String(it.id)]; changed = true; }
+              }
+            });
+            if (changed) localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(overrides));
+          } catch (_) {}
           try {
             localStorage.setItem(ITEMS_CACHE_KEY, JSON.stringify({
               savedAt: Date.now(),
@@ -1013,11 +1039,29 @@
       renderProducts(filtered);
       loadGlobalFavorites();
     }
+    const STOCK_CACHE_KEY = "taastore_stock_overrides_v1";
+    function getStockOverrides() {
+      try { return JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || "{}"); } catch (_) { return {}; }
+    }
+    function setStockOverride(id, qty) {
+      try {
+        const map = getStockOverrides();
+        map[String(id)] = qty;
+        localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(map));
+      } catch (_) {}
+    }
+    function clearStockOverrides() { try { localStorage.removeItem(STOCK_CACHE_KEY); } catch (_) {} }
+
     function getStockQuantity(item) {
       const raw = item?.stock_quantity ?? item?.stock_qty ?? item?.stock ?? item?.quantity;
       if (raw !== undefined && raw !== null && raw !== '') {
         const n = Number(raw);
-        return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+        if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
+      }
+      const override = getStockOverrides()[String(item?.id ?? '')];
+      if (override !== undefined && override !== null && override !== '') {
+        const n = Number(override);
+        if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
       }
       if (String(item?.stock_status || '').toLowerCase() === 'empty') return 0;
       return null;
@@ -1103,13 +1147,8 @@
                 <span class="w-5 h-5 inline-flex items-center justify-center">×</span>Stok Habis
               </button>
             ` : `
-              <div class="flex items-center gap-2 mb-2">
-                <button type="button" onclick="adjustCatalogQty(${item.id},-1)" ${isOut ? 'disabled' : ''} class="w-10 h-10 rounded-xl border border-slate-700 bg-slate-950/80 text-slate-200 text-lg font-black hover:bg-slate-800 disabled:opacity-40" aria-label="Kurangi jumlah">−</button>
-                <input id="catalog-qty-${item.id}" type="number" min="1" ${stockQty !== null ? `max="${Math.max(1,stockQty)}"` : ''} value="1" inputmode="numeric" ${isOut ? 'disabled' : ''} class="flex-1 h-10 rounded-xl border border-slate-700 bg-slate-950/80 text-white text-center font-black text-sm focus:outline-none focus:border-amber-400 disabled:opacity-40" aria-label="Jumlah ${item.name}">
-                <button type="button" onclick="adjustCatalogQty(${item.id},1)" ${isOut ? 'disabled' : ''} class="w-10 h-10 rounded-xl border border-slate-700 bg-slate-950/80 text-slate-200 text-lg font-black hover:bg-slate-800 disabled:opacity-40" aria-label="Tambah jumlah">+</button>
-              </div>
-              <button type="button" onclick="addCatalogQty(${item.id})" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
-                <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Tambah Pesanan
+              <button type="button" onclick="addToCart(${item.id},1)" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
+                <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Tambah ke Pesanan
               </button>
             `)}
             ${isAdmin ? `
@@ -1536,7 +1575,7 @@
       else cartItems.push({product_id:item.id, product:item.name, unit_price:Number(item.price)||0, qty:amount});
       saveCartItems();
       playCyberBeep(900,'sine',0.06);
-      openCartCheckout();
+      // Tetap di katalog; pesanan diperbarui tanpa membuka modal.
     }
     function changeCartQty(productId, delta) {
       const item=cartItems.find(x=>String(x.product_id)===String(productId)); if(!item)return;
@@ -1565,11 +1604,13 @@
         const unit=cartUnit(x.product);
         const unitPrice=Number(x.unit_price)||0;
         const lineTotal=unitPrice*qty;
+        const icon = cartProductIcon(x.product);
         return `<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-          <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <img src="${icon}" alt="" class="w-12 h-12 rounded-xl object-contain bg-slate-900/80 border border-slate-800 p-1.5 shrink-0 [image-rendering:pixelated]" aria-hidden="true">
             <div class="min-w-0 flex-1">
               <div class="text-sm font-black text-white truncate">${escapeReviewText(x.product)}</div>
-              <div class="text-[11px] text-slate-500 mt-0.5">Rp ${unitPrice.toLocaleString('id-ID')} / ${unit}</div>
+              <div class="text-[11px] text-slate-500 mt-0.5">Rp ${unitPrice.toLocaleString('id-ID')} / unit</div>
             </div>
             <div class="text-xs font-black text-amber-400 whitespace-nowrap">Rp ${lineTotal.toLocaleString('id-ID')}</div>
           </div>
@@ -1577,25 +1618,15 @@
             <button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',-1)" class="w-8 h-8 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">−</button>
             <input type="number" min="1" value="${qty}" inputmode="numeric" aria-label="Jumlah ${escapeReviewText(x.product)}" onchange="setCartQty('${escapeReviewText(x.product_id)}', this.value)" class="w-14 h-8 rounded-lg border border-slate-700 bg-slate-900 text-white text-center text-xs font-black focus:outline-none focus:border-amber-400">
             <button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',1)" class="w-8 h-8 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">+</button>
-            <span class="text-[10px] font-black text-cyan-300 min-w-8 text-center">${unit}</span>
             <button type="button" onclick="removeCartItem('${escapeReviewText(x.product_id)}')" aria-label="Hapus ${escapeReviewText(x.product)}" class="w-8 h-8 rounded-lg border border-rose-700/40 text-rose-300 hover:bg-rose-950/40">×</button>
           </div>
         </div>`;
       }).join('');
       if(total) total.textContent=`Rp ${cartTotal().toLocaleString('id-ID')}`;
     }
-    function adjustCatalogQty(id, delta) {
-      const input=document.getElementById(`catalog-qty-${id}`);
-      if(!input)return;
-      const stock=getStockQuantity(itemsData.find(x=>String(x.id)===String(id)));
-      const next=Math.max(1,(parseInt(input.value,10)||1)+delta);
-      input.value=String(stock === null ? next : Math.min(Math.max(1,stock), next));
-    }
-    function addCatalogQty(id) {
-      const input=document.getElementById(`catalog-qty-${id}`);
-      const qty=Math.max(1,parseInt(input?.value,10)||1);
-      addToCart(id,qty);
-    }
+    // Qty diatur hanya di Pesanan, bukan di katalog.
+    function adjustCatalogQty() {}
+    function addCatalogQty(id) { addToCart(id, 1); }
     function openCartModal(id) { addToCart(id,1); }
     function openCartCheckout() {
       loadCartItems();
@@ -2063,33 +2094,47 @@ Terima kasih 🙏`;
     async function saveItem(e) {
       e.preventDefault();
       const id = document.getElementById("item-id").value;
-      const name = document.getElementById("item-name").value;
+      const name = document.getElementById("item-name").value.trim();
       const price = parseFloat(document.getElementById("item-price").value);
       const image_url = document.getElementById("item-image").value;
       const type = document.getElementById("item-type").value;
-      const stock_status = document.getElementById("item-status").value;
       const stockRaw = document.getElementById("item-stock-qty").value;
       const stock_quantity = stockRaw === '' ? null : Math.max(0, parseInt(stockRaw,10)||0);
+      const stock_status = stock_quantity === 0 ? 'empty' : stock_quantity !== null && stock_quantity <= 3 ? 'limited' : 'ready';
       const payload = { name, price, image_url, type, stock_status, stock_quantity };
-      const headers = {
-        "Content-Type": "application/json",
-        "x-admin-key": adminKey
-      };
-      if (id) {
-        await fetch(`${API_URL}/items/${id}`, {
-          method: "PUT",
-          headers: headers,
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await fetch(`${API_URL}/items`, {
-          method: "POST",
-          headers: headers,
-          body: JSON.stringify(payload)
-        });
+      const headers = { "Content-Type": "application/json", "x-admin-key": adminKey };
+      try {
+        const url = id ? `${API_URL}/items/${id}` : `${API_URL}/items`;
+        const response = await fetch(url, { method: id ? "PUT" : "POST", headers, body: JSON.stringify(payload) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        // Persist the numeric stock directly to Supabase. The public update
+        // policy in this test build allows the Admin Panel to update items.
+        if (id && stock_quantity !== null) {
+          const stockResponse = await fetch(`${SUPABASE_REST}/items?id=eq.${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: { ...supabaseHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ stock_quantity, stock_status })
+          });
+          if (!stockResponse.ok) {
+            const detail = await stockResponse.text();
+            throw new Error(`Gagal menyimpan stok ke Supabase (${stockResponse.status}): ${detail}`);
+          }
+          setStockOverride(id, stock_quantity);
+        }
+        resetForm();
+        itemsLoadPromise = null;
+        await loadItems();
+        showToast('Produk dan stok berhasil disimpan.');
+      } catch (err) {
+        console.error('TAASTORE save item error:', err);
+        if (id && stock_quantity !== null) {
+          const local = itemsData.find(x => String(x.id) === String(id));
+          if (local) { local.stock_quantity = stock_quantity; local.stock_status = stock_status; }
+          filterProducts();
+        }
+        showToast(err?.message || 'Gagal menyimpan produk/stok.', true);
       }
-      resetForm();
-      loadItems();
     }
     async function deleteItem(id) {
       if (confirm("Yakin ingin menghapus produk ini?")) {
