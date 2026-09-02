@@ -1431,7 +1431,7 @@ const QRIS_DATA_URI = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSU
       }).join('');
       const totalEl = document.getElementById('cart-total-price'); if (totalEl) totalEl.textContent = `Rp ${cartTotal().toLocaleString('id-ID')}`;
       const qtyEl = document.getElementById('cart-total-items'); if (qtyEl) qtyEl.textContent = count;
-      const btn = document.getElementById('cart-checkout-btn'); if (btn) btn.disabled = !cartItems.length;
+      const btn = document.getElementById('cart-checkout-btn'); if (btn) { btn.disabled = false; btn.removeAttribute('aria-disabled'); }
     }
     function openCartModal(id) { if (id != null) return addToCart(id); openCartView(); }
     function openCartView() { loadCart(); document.getElementById('cart-modal')?.classList.remove('hidden'); }
@@ -1474,9 +1474,9 @@ const QRIS_DATA_URI = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSU
       if (e) { e.preventDefault(); e.stopPropagation(); }
       try { playCyberBeep(1100, 'square', 0.1); } catch (_) {}
       loadCart();
-      if (!cartItems.length) { showToast('Keranjang masih kosong.', true); return; }
+      if (!cartItems.length) { showToast('Keranjang masih kosong.', true); const btn=document.getElementById('cart-checkout-btn'); if(btn) btn.disabled=false; return; }
       const total = cartTotal();
-      if (total < 10000) { showToast('Minimum order BUY adalah Rp 10.000.', true); return; }
+      if (total < 10000) { showToast('Minimum order BUY adalah Rp 10.000.', true); const btn=document.getElementById('cart-checkout-btn'); if(btn) btn.disabled=false; return; }
       const buyerName = document.getElementById('buyer-name').value.trim();
       const whatsappNumber = normalizeWhatsAppNumber(document.getElementById('buyer-wa').value.trim());
       if (!whatsappNumber) { showToast('Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.', true); return; }
