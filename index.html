@@ -1487,13 +1487,25 @@ const QRIS_DATA_URI = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSU
       const orderItems = cartItems.map(item => ({ product_id: item.product_id, product: item.product, qty: Number(item.qty)||1, unit_price: Number(item.unit_price)||0 }));
       const productSummary = orderItems.map(item => `${item.qty} ${getProductUnit(item.product)}`).join(' + ');
       const qtySummary = cartQtyTotal();
-      const order = { order_id: orderId, buyer_name: buyerName, product: productSummary, qty: qtySummary, total, grow_id: gameId, world, payment, whatsapp_number: whatsappNumber, order_items: orderItems, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'BUY', buyer_proof_data: null };
+      // Keep the checkout compatible with the existing V4/V5 Supabase schema.
+      // order_items is optional: the order must still be created even if the new
+      // JSONB column has not been added yet. The local order keeps the full cart.
+      const order = { order_id: orderId, buyer_name: buyerName, product: productSummary, qty: qtySummary, total, grow_id: gameId, world, payment, whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'BUY', buyer_proof_data: null };
       try {
         await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch (err) {
         console.error('TAASTORE Supabase order insert error:', err);
         const detail=[err.message,err.code?`code: ${err.code}`:'',err.hint?`hint: ${err.hint}`:''].filter(Boolean).join(' | ');
         showToast(`Order gagal disimpan: ${detail || 'cek koneksi Supabase'}`, true); return;
+      }
+      // Save the complete cart locally so the payment modal and buyer history
+      // can immediately show all items. Try to persist order_items when the
+      // optional Supabase column exists, but never block checkout if it does not.
+      order.order_items = orderItems;
+      try {
+        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({order_items: orderItems}) });
+      } catch (err) {
+        console.warn('TAASTORE: order_items column belum tersedia; checkout tetap dilanjutkan.', err);
       }
       const orders=getOrders(); orders.unshift(order); saveOrders(orders); localStorage.setItem('taastore_last_order_id',orderId);
       cartItems=[]; saveCart(); closeCartModal(); await loadBuyerOrders(); openPaymentModal(order); showToast(`Order ${orderId} dibuat. Lanjutkan pembayaran di halaman ini.`); if(isAdmin) await loadAdminOrders();
