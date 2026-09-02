@@ -517,7 +517,9 @@
         <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-6 relative max-h-[92vh] overflow-y-auto overscroll-contain">
           <div class="sticky top-0 z-20 -mx-6 px-6 pt-0 pb-3 mb-4 flex justify-between items-center border-b border-slate-800 bg-slate-900/95 backdrop-blur-md">
             <div class="flex items-center gap-2 min-w-0">
-              <img id="cart-header-icon" src="assets/logo.jpg" alt="Produk" class="w-7 h-7 rounded-md object-contain bg-slate-950/60 p-0.5">
+              <span id="cart-header-icon" class="w-8 h-8 rounded-lg border border-cyan-500/20 bg-slate-950/70 text-cyan-300 inline-flex items-center justify-center shrink-0" aria-hidden="true">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.95-1.56L20 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.2" fill="currentColor"/><circle cx="18" cy="20" r="1.2" fill="currentColor"/></svg>
+              </span>
               <h3 class="font-bold text-lg text-amber-400 truncate" id="cart-item-name">Detail Pesanan</h3>
             </div>
             <button type="button" onclick="closeCartModal()" class="shrink-0 w-8 h-8 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 text-base">✕</button>
@@ -526,16 +528,6 @@
           <div id="cart-items-summary" class="mb-4 space-y-2 max-h-40 overflow-y-auto"></div>
           <div id="cart-empty-message" class="hidden text-xs text-slate-500 text-center py-3">Keranjang masih kosong.</div>
           <form onsubmit="sendToWA(event)" class="space-y-3">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs text-slate-400 mb-1 block">Harga Satuan</label>
-                <div class="text-base font-bold text-white" id="cart-item-price">Rp 0</div>
-              </div>
-              <div>
-                <label class="text-xs text-slate-400 mb-1 block">Jumlah / Qty</label>
-                <input type="number" id="cart-qty" min="1" value="1" oninput="calculateTotal()" required class="w-full bg-slate-950/80 border border-slate-800 p-2 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
-              </div>
-            </div>
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Nama Pembeli</label>
               <input type="text" id="buyer-name" placeholder="Masukkan nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
@@ -1438,29 +1430,58 @@
       cartItems=cartItems.filter(x=>x.qty>0); saveCartItems(); renderCartSummary();
     }
     function removeCartItem(productId) { cartItems=cartItems.filter(x=>String(x.product_id)!==String(productId)); saveCartItems(); renderCartSummary(); }
+    function cartProductIcon(name) {
+      const n=String(name||'').toLowerCase();
+      if(n.includes('blue gem lock') || n==='bgl' || n.includes('blue gemlock')) return 'assets/bgl.png';
+      if(n.includes('diamond lock') || n==='dl' || n.includes('diamondlock')) return 'assets/dl.png';
+      return 'assets/logo.jpg';
+    }
     function renderCartSummary() {
       const box=document.getElementById('cart-items-summary'), empty=document.getElementById('cart-empty-message'), total=document.getElementById('cart-total-price');
       if(!box)return;
       if(!cartItems.length){ box.innerHTML=''; box.classList.add('hidden'); if(empty)empty.classList.remove('hidden'); if(total)total.textContent='Rp 0'; return; }
       box.classList.remove('hidden'); if(empty)empty.classList.add('hidden');
-      box.innerHTML=cartItems.map(x=>{ const n=String(x.product||'').toLowerCase(); const icon=n.includes('blue gem')||n==='bgl' ? 'assets/bgl.png' : (n.includes('diamond lock')||n==='dl' ? 'assets/dl.png' : 'assets/logo.jpg'); return `<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 flex items-center justify-between gap-2"><div class="flex items-center gap-2 min-w-0"><img src="${icon}" alt="" class="w-8 h-8 object-contain rounded-lg bg-slate-950/70 p-0.5 shrink-0 [image-rendering:pixelated]" aria-hidden="true"><div class="min-w-0"><div class="text-xs font-bold text-white truncate">${escapeReviewText(x.product)}</div><div class="text-[10px] text-slate-500">${Number(x.qty)||0} ${cartUnit(x.product)} × Rp ${(Number(x.unit_price)||0).toLocaleString('id-ID')}</div></div></div><div class="flex items-center gap-1.5 shrink-0"><button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',-1)" class="w-7 h-7 rounded-lg border border-slate-700 text-slate-300">−</button><span class="text-xs font-bold text-white w-4 text-center">${Number(x.qty)||0}</span><button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',1)" class="w-7 h-7 rounded-lg border border-slate-700 text-slate-300">+</button><button type="button" onclick="removeCartItem('${escapeReviewText(x.product_id)}')" class="w-7 h-7 rounded-lg border border-rose-700/40 text-rose-300">×</button></div></div>`}).join('');
+      box.innerHTML=cartItems.map(x=>{
+        const qty=Math.max(1,Number(x.qty)||1);
+        const unit=cartUnit(x.product);
+        const icon=cartProductIcon(x.product);
+        return `<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0">
+              <img src="${icon}" alt="${escapeReviewText(x.product)}" class="w-9 h-9 object-contain [image-rendering:pixelated]" onerror="this.onerror=null;this.src='assets/logo.jpg'">
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-black text-white truncate">${escapeReviewText(x.product)}</div>
+              <div class="text-[11px] text-slate-500 mt-0.5">Rp ${(Number(x.unit_price)||0).toLocaleString('id-ID')} / ${unit}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',-1)" class="w-8 h-8 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">−</button>
+            <input type="number" min="1" value="${qty}" inputmode="numeric" aria-label="Jumlah ${escapeReviewText(x.product)}" onchange="setCartQty('${escapeReviewText(x.product_id)}', this.value)" class="w-14 h-8 rounded-lg border border-slate-700 bg-slate-900 text-white text-center text-xs font-black focus:outline-none focus:border-amber-400">
+            <button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',1)" class="w-8 h-8 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">+</button>
+            <span class="text-[10px] font-black text-amber-400 w-8 text-center">${unit}</span>
+            <button type="button" onclick="removeCartItem('${escapeReviewText(x.product_id)}')" aria-label="Hapus ${escapeReviewText(x.product)}" class="w-8 h-8 rounded-lg border border-rose-700/40 text-rose-300 hover:bg-rose-950/40">×</button>
+          </div>
+        </div>`;
+      }).join('');
       if(total) total.textContent=`Rp ${cartTotal().toLocaleString('id-ID')}`;
     }
     function openCartModal(id) { addToCart(id); }
     function openCartCheckout() {
       loadCartItems();
       renderCartSummary();
-      document.getElementById('cart-item-name').textContent=cartItems.length===1 ? cartItems[0].product : 'Keranjang Pesanan';
-      const cartIcon=document.getElementById('cart-header-icon');
-      if(cartIcon){ const n=String(cartItems.length===1 ? cartItems[0].product : '').toLowerCase(); cartIcon.src = n.includes('blue gem')||n==='bgl' ? 'assets/bgl.png' : (n.includes('diamond lock')||n==='dl' ? 'assets/dl.png' : 'assets/logo.jpg'); }
-      document.getElementById('cart-item-price').textContent=cartItems.length===1 ? `Rp ${(Number(cartItems[0].unit_price)||0).toLocaleString('id-ID')}` : `${cartItems.length} produk`;
-      document.getElementById('cart-qty').value=cartItems.length===1 ? (Number(cartItems[0].qty)||1) : 1;
+      const name=document.getElementById('cart-item-name');
+      if(name) name.textContent=cartItems.length===1 ? cartItems[0].product : 'Pesanan';
       document.getElementById('cart-modal').classList.remove('hidden');
     }
     function closeCartModal() { document.getElementById('cart-modal').classList.add('hidden'); selectedItem=null; }
+    function setCartQty(productId, value) {
+      const item=cartItems.find(x=>String(x.product_id)===String(productId)); if(!item)return;
+      const q=Math.max(1,parseInt(value,10)||1);
+      item.qty=q; saveCartItems(); renderCartSummary();
+    }
     function calculateTotal() {
-      if(cartItems.length===1){ const q=Math.max(1,parseInt(document.getElementById('cart-qty').value)||1); cartItems[0].qty=q; saveCartItems(); renderCartSummary(); return; }
-      const total=document.getElementById('cart-total-price'); if(total) total.textContent=`Rp ${cartTotal().toLocaleString('id-ID')}`;
+      renderCartSummary();
     }
 
     function getOrders() {
