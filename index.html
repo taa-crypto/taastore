@@ -650,7 +650,7 @@
           <form onsubmit="submitSellRequest(event)" class="space-y-3">
             <div class="grid grid-cols-2 gap-3">
               <div><label class="text-xs text-slate-400 mb-1 block">Nama Seller</label><input id="sell-name" type="text" placeholder="Nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
-              <div><label class="text-xs text-slate-400 mb-1 block">Jumlah BGL/DL</label><input id="sell-qty" type="number" min="1" value="1" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
+              <div><label class="text-xs text-slate-400 mb-1 block">Jumlah BGL/DL</label><input id="sell-qty" type="number" min="50" step="1" value="50" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"><p id="sell-qty-note" class="text-[10px] text-slate-500 mt-1">Minimum: 50 DL (0,5 BGL) · 1 BGL = 100 DL</p></div>
             </div>
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Nomor WhatsApp</label>
@@ -1654,7 +1654,20 @@
       if (!selectedItem) return;
       document.getElementById('sell-item-name').innerText = selectedItem.name;
       document.getElementById('sell-rate-masked').innerText = maskTakeRate(getTakeRate(selectedItem)) || 'Rp **.***';
-      document.getElementById('sell-qty').value = 1;
+      const qtyInput = document.getElementById('sell-qty');
+      const qtyNote = document.getElementById('sell-qty-note');
+      const kind = lockKind(selectedItem);
+      if (kind === 'BGL') {
+        qtyInput.min = '0.5';
+        qtyInput.step = '0.01';
+        qtyInput.value = '0.5';
+        if (qtyNote) qtyNote.textContent = 'Minimum: 0,5 BGL (50 DL) · 1 BGL = 100 DL';
+      } else {
+        qtyInput.min = '50';
+        qtyInput.step = '1';
+        qtyInput.value = '50';
+        if (qtyNote) qtyNote.textContent = 'Minimum: 50 DL · 1 BGL = 100 DL';
+      }
       document.getElementById('sell-modal').classList.remove('hidden');
     }
     function closeSellModal() {
@@ -1668,7 +1681,11 @@
     async function submitSellRequest(e) {
       e.preventDefault();
       if (!selectedItem) return;
-      const qty = Math.max(1, parseInt(document.getElementById('sell-qty').value) || 1);
+      const kind = lockKind(selectedItem);
+      const rawQty = String(document.getElementById('sell-qty').value || '').trim().replace(',', '.');
+      const qty = kind === 'BGL' ? Math.max(0, Number(rawQty) || 0) : Math.max(0, Math.floor(Number(rawQty) || 0));
+      const equivalentDL = kind === 'BGL' ? Math.round(qty * 100) : Math.floor(qty);
+      if (equivalentDL < 50) { showToast('Minimum jual adalah 50 DL (0,5 BGL).', true); return; }
       const sellerName = document.getElementById('sell-name').value.trim();
       const whatsappNumber = normalizeWhatsAppNumber(document.getElementById('sell-wa').value.trim());
       if (!whatsappNumber) { showToast('Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.', true); return; }
@@ -1683,7 +1700,7 @@
         const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | '); showToast(`Pengajuan gagal disimpan: ${detail || 'cek Supabase'}`, true); console.error('TAASTORE SELL insert error:', err); return;
       }
       const orders=getOrders(); orders.unshift(order); saveOrders(orders); rememberBuyerOrderId(orderId); localStorage.setItem('taastore_last_order_id', orderId);
-      const text = `💰 *FORM PENJUALAN TAASTORE*\n━━━━━━━━━━━━━━━━━━━━\n• *Order ID* : ${orderId}\n• *Nama Seller* : ${sellerName}\n• *Produk* : ${selectedItem.name}\n• *Jumlah* : ${qty} BGL/DL\n• *GrowID / ID Game* : ${gameId}\n• *Catatan* : ${note || '-'}\n━━━━━━━━━━━━━━━━━━━━\nMohon info *Rate Take* terbaru dan detail proses penjualan untuk order ini.\n\nTerima kasih! 🙏`;
+      const text = `💰 *FORM PENJUALAN TAASTORE*\n━━━━━━━━━━━━━━━━━━━━\n• *Order ID* : ${orderId}\n• *Nama Seller* : ${sellerName}\n• *Produk* : ${selectedItem.name}\n• *Jumlah* : ${qty} ${kind || 'BGL/DL'} (${equivalentDL} DL)\n• *GrowID / ID Game* : ${gameId}\n• *Catatan* : ${note || '-'}\n━━━━━━━━━━━━━━━━━━━━\nMohon info *Rate Take* terbaru dan detail proses penjualan untuk order ini.\n\nTerima kasih! 🙏`;
       window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
       closeSellModal(); showToast(`Pengajuan ${orderId} dibuat. Cek pesanan untuk Setujui atau Batalkan.`); await loadBuyerOrders(); if(isAdmin) await loadAdminOrders();
     }
@@ -2282,15 +2299,42 @@ Terima kasih 🙏`;
         console.error("TAASTORE acceptBuyerPayment error:", err);
       }
     }
+    async function addSellToBuyStock(order) {
+      const kind = lockKind({ name: order?.product || '' });
+      const qty = Math.max(0, Number(order?.qty) || 0);
+      const addDL = kind === 'BGL' ? Math.round(qty * 100) : kind === 'DL' ? Math.floor(qty) : 0;
+      if (addDL <= 0) return false;
+      const { bgl } = getLockItems();
+      const bglId = bgl ? String(bgl.id) : '';
+      if (!bglId) throw new Error('Produk BGL BUY belum tersedia, stok hasil SELL tidak dapat ditambahkan.');
+      const rows = await supabaseRequest(`product_stock?select=product_id,stock_quantity&product_id=eq.${encodeURIComponent(bglId)}&limit=1`);
+      const currentDL = Array.isArray(rows) && rows[0] ? Math.max(0, Math.floor(Number(rows[0].stock_quantity) || 0)) : 0;
+      await setUnifiedLockStockDL(currentDL + addDL);
+      return true;
+    }
+
     async function completeOrder(orderId) {
       if (!isAdmin || !orderId) return;
       try {
         const existing = getOrders().find(o=>o.order_id===orderId) || {};
+        const isSell = existing.order_type === 'SELL' || existing.payment === 'SELL';
+        const alreadyCompleted = existing.status === 'COMPLETED' || existing.sell_status === 'SELL_COMPLETED';
+        if (alreadyCompleted) return;
         const patch = { status: "COMPLETED", completed_at: new Date().toISOString() };
-        if (existing.order_type === 'SELL') patch.sell_status = 'SELL_COMPLETED';
+        if (isSell) patch.sell_status = 'SELL_COMPLETED';
         await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: "PATCH", headers: { "Prefer": "return=minimal" }, body: JSON.stringify(patch) });
         const local = getOrders(); const idx = local.findIndex(o => o.order_id === orderId); if (idx >= 0) { Object.assign(local[idx], patch); saveOrders(local); }
-        await loadAdminOrders(); await loadBuyerOrders(); showToast(`Order ${orderId} ditandai selesai.`);
+        if (isSell) {
+          try {
+            await addSellToBuyStock(existing);
+          } catch (stockErr) {
+            console.error('TAASTORE SELL stock increment error:', stockErr);
+            showToast(`SELL ${orderId} selesai, tetapi stok BUY belum bertambah: ${stockErr.message || 'cek stok BGL'}`, true);
+          }
+        }
+        await loadRemoteStock();
+        await loadAdminOrders(); await loadBuyerOrders();
+        showToast(isSell ? `SELL ${orderId} selesai dan stok BUY diperbarui.` : `Order ${orderId} ditandai selesai.`);
       } catch (err) {
         const detail = [err.message, err.code ? `code: ${err.code}` : "", err.hint ? `hint: ${err.hint}` : ""].filter(Boolean).join(" | ");
         showToast(`Gagal menandai order: ${detail || "cek izin UPDATE Supabase"}`, true);
