@@ -1444,6 +1444,7 @@
       if (!selectedItem) return;
       const qty = Math.max(1, parseInt(document.getElementById("cart-qty").value) || 1);
       const total = selectedItem.price * qty;
+      if (total < 10000) { showToast("Minimum order BUY adalah Rp 10.000.", true); return; }
       const buyerName = document.getElementById("buyer-name").value.trim();
       const whatsappNumber = normalizeWhatsAppNumber(document.getElementById("buyer-wa").value.trim());
       if (!whatsappNumber) { showToast("Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.", true); return; }
@@ -1453,7 +1454,9 @@
       const orderId = makeOrderId();
       const order = {
         order_id: orderId, buyer_name: buyerName, product: selectedItem.name, qty, total,
-        grow_id: gameId, world, payment, whatsapp_number: whatsappNumber, status: "WAITING_PAYMENT", created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: "BUY", buyer_proof_data: null
+        grow_id: gameId, world, payment, whatsapp_number: whatsappNumber,
+        status: "WAITING_PAYMENT", created_at: new Date().toISOString(),
+        paid_at: null, completed_at: null, order_type: "BUY", buyer_proof_data: null
       };
       try {
         await supabaseRequest("orders", {
@@ -1470,11 +1473,9 @@
       }
       const orders = getOrders(); orders.unshift(order); saveOrders(orders);
       localStorage.setItem("taastore_last_order_id", orderId);
-      const textMessage =
-`🛒 *FORM PESANAN TAASTORE*\n----------------------------------------\n• *Order ID*: ${orderId}\n• *Nama Pembeli*: ${buyerName}\n• *Produk*: ${selectedItem.name}\n• *Jumlah*: ${qty}x\n• *Total Harga*: Rp ${total.toLocaleString('id-ID')}\n• *GrowID / ID Game*: ${gameId}\n• *World Name*: ${world}\n• *Metode Bayar*: ${payment}\n----------------------------------------\nMohon diproses min, terima kasih! 🙏`;
-      window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(textMessage)}`, '_blank');
       closeCartModal();
-      showToast(`Order ${orderId} dibuat. Order ID tersimpan otomatis.`);
+      openPaymentModal(order);
+      showToast(`Order ${orderId} dibuat. Lanjutkan pembayaran di halaman ini.`);
       if (isAdmin) await loadAdminOrders();
     }
     let activePaymentOrderId = null;
@@ -1559,7 +1560,7 @@ Terima kasih 🙏`;
         return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nPembayaran telah kami proses.\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
       }
       if (kind === 'payment') {
-        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran dilakukan, silakan kirim bukti pembayaran melalui chat ini.\n\nTerima kasih 🙏\n— TAASTORE`;
+        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE, lalu gunakan tombol Konfirmasi via WhatsApp.\n\nTerima kasih 🙏\n— TAASTORE`;
       }
       if (kind === 'paid') return `Halo kak 👋\n\n✅ Pembayaran untuk Order ID *${id}* sudah kami terima.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
       if (kind === 'ready') return `Halo kak 👋\n\n✅ Pesanan Order ID *${id}* sudah siap.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nSilakan datang ke:\n🌎 World: ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
@@ -1622,11 +1623,12 @@ Terima kasih 🙏`;
         if (statusText !== 'DIBATALKAN' && statusText !== 'SELESAI') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai / Bayar</button>`;
         if (statusText === 'SELESAI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
       } else {
-              closeCartModal();
-      openPaymentModal(order);
-      showToast(`Order ${orderId} dibuat. Lanjutkan pembayaran di halaman ini.`);
-      if (isAdmin) await loadAdminOrders();
-        else buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+        if (o.buyer_proof_data) buttons += `<button type="button" onclick="openBuyerProof('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📸 Lihat Bukti</button>`;
+        if (o.status === 'WAITING_PAYMENT' && o.buyer_proof_data) buttons += `<button type="button" onclick="acceptBuyerPayment('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Terima Pembayaran</button>`;
+        if (o.status === 'PAID') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','paid')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Kirim Update</button>`;
+        if (o.status !== 'COMPLETED' && o.status !== 'PAID' && o.status !== 'CANCELLED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💬 Chat WhatsApp</button>`;
+        if (o.status === 'PAID') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai</button>`;
+        if (o.status === 'COMPLETED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
       }
       const wa = getOrderWhatsApp(o);
       const customerLabel = isSell ? (o.buyer_name || '-') : (o.buyer_name || '-');
@@ -1659,6 +1661,27 @@ Terima kasih 🙏`;
       const history = orders.filter(adminOrderIsHistory);
       list.innerHTML = `${active.length ? `<div class="space-y-3">${active.map(adminOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada order aktif.</p>'}
         ${history.length ? `<details class="mt-5 rounded-xl border border-slate-800 bg-slate-950/30"><summary class="cursor-pointer select-none px-3 py-2.5 text-xs font-bold text-slate-400">📁 Riwayat (${history.length})</summary><div class="p-3 pt-0 space-y-3">${history.map(adminOrderCard).join('')}</div></details>` : ''}`;
+    }
+    async function acceptBuyerPayment(orderId) {
+      if (!isAdmin || !orderId) return;
+      try {
+        const patch = { status: "PAID", paid_at: new Date().toISOString() };
+        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {
+          method: "PATCH",
+          headers: { "Prefer": "return=minimal" },
+          body: JSON.stringify(patch)
+        });
+        const local = getOrders();
+        const idx = local.findIndex(o => o.order_id === orderId);
+        if (idx >= 0) { Object.assign(local[idx], patch); saveOrders(local); }
+        await loadAdminOrders();
+        await loadBuyerOrders();
+        showToast(`Pembayaran ${orderId} diterima.`);
+      } catch (err) {
+        const detail = [err.message, err.code ? `code: ${err.code}` : "", err.hint ? `hint: ${err.hint}` : ""].filter(Boolean).join(" | ");
+        showToast(`Gagal menerima pembayaran: ${detail || "cek izin UPDATE Supabase"}`, true);
+        console.error("TAASTORE acceptBuyerPayment error:", err);
+      }
     }
     async function completeOrder(orderId) {
       if (!isAdmin || !orderId) return;
