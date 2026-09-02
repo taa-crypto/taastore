@@ -1714,22 +1714,17 @@ Terima kasih 🙏`;
     async function deleteHistoryOrder(orderId) {
       if (!isAdmin || !orderId) return;
       const id = String(orderId);
+      const order = getOrders().find(o => String(o.order_id) === id);
+      if (!order || !adminOrderIsHistory(order)) {
+        showToast('Hanya riwayat pesanan yang bisa dihapus.', true);
+        return;
+      }
       if (!confirm(`Hapus riwayat pesanan ${id}? Pesanan yang dihapus tidak dapat dipulihkan.`)) return;
       try {
-        const response = await fetch('/api/admin-delete-order', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-admin-key': adminKey
-          },
-          body: JSON.stringify({ order_id: id })
+        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: { 'Prefer': 'return=minimal' }
         });
-        let result = {};
-        try { result = await response.json(); } catch (_) {}
-        if (!response.ok || !result.ok) {
-          const detail = result.detail || result.error || `HTTP ${response.status}`;
-          throw new Error(detail);
-        }
         const local = getOrders().filter(o => String(o.order_id) !== id);
         saveOrders(local);
         delete window.taastoreBuyerProofCache[id];
@@ -1739,7 +1734,7 @@ Terima kasih 🙏`;
         showToast(`Riwayat ${id} berhasil dihapus.`);
       } catch (err) {
         const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | ');
-        showToast(`Gagal menghapus riwayat: ${detail || 'server admin belum dikonfigurasi'}`, true);
+        showToast(`Gagal menghapus riwayat: ${detail || 'cek izin DELETE Supabase.'}`, true);
         console.error('TAASTORE deleteHistoryOrder error:', err);
       }
     }
