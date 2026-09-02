@@ -436,7 +436,7 @@
         <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3 gap-3">
           <div>
             <h3 class="font-black text-white">Pesanan Saya</h3>
-            <p class="text-xs text-slate-500 mt-1">Order aktif ditampilkan di sini. Pesanan selesai/batal masuk ke Riwayat dan dibersihkan otomatis setelah 30 hari.</p>
+            <p class="text-xs text-slate-500 mt-1">Order aktif ditampilkan di sini. Pesanan selesai/batal masuk ke Riwayat dan dibersihkan otomatis setelah 30 hari. Setelah transaksi selesai, kamu bisa kembali ke sini untuk memberi testimoni.</p>
           </div>
           <button type="button" onclick="loadBuyerOrders()" class="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Refresh</button>
         </div>
@@ -1190,7 +1190,7 @@
         const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : cancelled ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
         const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN',SELL_COMPLETED:'SELESAI'};
         const statusText = done ? 'SELESAI' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : (order.status === 'PAID' ? 'PEMBAYARAN DITERIMA' : (order.buyer_proof_data ? 'BUKTI PEMBAYARAN TERKIRIM' : 'MENUNGGU PEMBAYARAN')));
-        let reviewBtn = done ? `<button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan order.</span>'
+        let reviewBtn = done ? `<div class="flex flex-col items-end gap-1.5"><span class="text-[10px] text-emerald-300">Transaksi selesai. Punya pengalaman?</span><button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button></div>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan transaksi.</span>'
         if (!isSell && !done && order.status !== 'PAID') reviewBtn = `<div class="flex gap-2 flex-wrap justify-end"><button type="button" onclick="reopenPayment('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">💳 ${order.buyer_proof_data ? 'Lihat Pembayaran' : 'Lanjut Pembayaran'}</button></div>`;;
         if (isSell && sellStatus === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
         if (isSell && sellStatus === 'SELL_WAITING_DROP') reviewBtn = `<label class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer">📷 Upload Bukti Drop<input type="file" accept="image/*" class="hidden" onchange="uploadSellProof('${escapeReviewText(order.order_id)}', this)"></label>`;
@@ -1218,13 +1218,17 @@
 
     async function openReviewForOrder(orderId) {
       const order = await getOrderById(orderId);
-      if (!order || order.status !== 'COMPLETED') {
-        showToast('Review tersedia setelah Admin menandai order selesai.', true);
+      const isSell = order && (order.order_type === 'SELL' || order.payment === 'SELL');
+      const done = !!order && (order.status === 'COMPLETED' || (isSell && order.sell_status === 'SELL_COMPLETED'));
+      if (!order || !done) {
+        showToast('Review tersedia setelah Admin menandai transaksi selesai.', true);
         return;
       }
       localStorage.setItem('taastore_last_order_id', String(order.order_id).toUpperCase());
       const info = document.getElementById('review-order-info');
-      if (info) info.textContent = `Order ${order.order_id} · ${order.product} · ✓ Verified Purchase`;
+      if (info) info.textContent = isSell
+        ? `Order ${order.order_id} · ${order.product} · ✓ Transaksi Seller Selesai`
+        : `Order ${order.order_id} · ${order.product} · ✓ Verified Purchase`;
       document.getElementById('review-name').value = order.buyer_name || '';
       document.getElementById('review-modal').classList.remove('hidden');
     }
@@ -1235,7 +1239,7 @@
       let completed = null;
       for (const id of ids) {
         const order = await getOrderById(id);
-        if (order && order.status === 'COMPLETED') { completed = order; break; }
+        if (order && (order.status === 'COMPLETED' || ((order.order_type === 'SELL' || order.payment === 'SELL') && order.sell_status === 'SELL_COMPLETED'))) { completed = order; break; }
       }
       const info = document.getElementById("review-order-info");
       if (!completed) {
@@ -1278,8 +1282,10 @@
       const comment = document.getElementById("review-comment").value.trim();
       if (!name || !comment || !orderId) return;
       const order = await getOrderById(orderId);
-      if (!order || order.status !== "COMPLETED") {
-        showToast("Order belum ditemukan atau belum ditandai selesai oleh Admin.", true);
+      const isSellOrder = order && (order.order_type === 'SELL' || order.payment === 'SELL');
+      const orderDone = !!order && (order.status === "COMPLETED" || (isSellOrder && order.sell_status === 'SELL_COMPLETED'));
+      if (!order || !orderDone) {
+        showToast("Transaksi belum selesai atau belum ditandai selesai oleh Admin.", true);
         return;
       }
       if (![3,4,5].includes(rating)) {
