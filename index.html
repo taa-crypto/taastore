@@ -514,13 +514,13 @@
     <!-- Modal Checkout Form Beranimasi Glassmorphism + Gradient Border -->
     <div id="cart-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 z-50">
       <div class="animated-border p-[2px] rounded-3xl max-w-md w-full shadow-2xl modal-scale-up">
-        <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-6 relative overflow-hidden">
-          <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
-            <div class="flex items-center gap-2">
-              <img src="assets/logo.jpg" alt="Logo" class="w-6 h-6 rounded-md">
-              <h3 class="font-bold text-lg text-amber-400" id="cart-item-name">Detail Pesanan</h3>
+        <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-6 relative max-h-[92vh] overflow-y-auto overscroll-contain">
+          <div class="sticky top-0 z-20 -mx-6 px-6 pt-0 pb-3 mb-4 flex justify-between items-center border-b border-slate-800 bg-slate-900/95 backdrop-blur-md">
+            <div class="flex items-center gap-2 min-w-0">
+              <img id="cart-header-icon" src="assets/logo.jpg" alt="Produk" class="w-7 h-7 rounded-md object-contain bg-slate-950/60 p-0.5">
+              <h3 class="font-bold text-lg text-amber-400 truncate" id="cart-item-name">Detail Pesanan</h3>
             </div>
-            <button onclick="closeCartModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+            <button type="button" onclick="closeCartModal()" class="shrink-0 w-8 h-8 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 text-base">✕</button>
           </div>
           
           <div id="cart-items-summary" class="mb-4 space-y-2 max-h-40 overflow-y-auto"></div>
@@ -555,6 +555,7 @@
                 <input type="text" id="buyer-world" placeholder="Contoh: TAASTORE" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
               </div>
             </div>
+            <div class="text-[10px] leading-relaxed text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2">⚠️ Pastikan GrowID dan World Name sudah benar. Jika data yang diisi salah, Admin tidak bertanggung jawab atas kesalahan transaksi.</div>
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Metode Pembayaran</label>
               <select id="buyer-payment" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
@@ -579,7 +580,7 @@
     <!-- Modal Pembayaran BUY -->
     <div id="payment-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xl flex items-center justify-center p-4 z-[60]">
       <div class="animated-border p-[2px] rounded-3xl max-w-md w-full shadow-2xl modal-scale-up"><div class="animated-border-content bg-slate-900/95 backdrop-blur-md rounded-3xl p-5 relative overflow-y-auto max-h-[92vh]">
-        <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4"><div><div class="text-[10px] uppercase tracking-[.22em] text-amber-400 font-black">Pembayaran</div><h3 class="font-black text-xl text-white">Order <span id="payment-order-id"></span></h3></div><button type="button" onclick="closePaymentModal()" class="text-slate-400 hover:text-white text-lg">✕</button></div>
+        <div class="sticky top-0 z-20 -mx-5 px-5 pt-0 pb-3 mb-4 flex justify-between items-center border-b border-slate-800 bg-slate-900/95 backdrop-blur-md"><div><div class="text-[10px] uppercase tracking-[.22em] text-amber-400 font-black">Pembayaran</div><h3 class="font-black text-xl text-white">Order <span id="payment-order-id"></span></h3></div><button type="button" onclick="closePaymentModal()" class="text-slate-400 hover:text-white text-lg">✕</button></div>
         <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 mb-4"><div class="flex justify-between gap-3"><span class="text-xs text-slate-400">Total Pembayaran</span><span id="payment-total" class="text-lg font-black text-amber-400">Rp 0</span></div><div class="text-[10px] text-slate-500 mt-1">Metode: <span id="payment-method" class="text-slate-300"></span></div></div>
         <div id="payment-details"></div>
         <div class="mt-4"><label class="text-xs text-slate-400 mb-1 block">📸 Bukti Pembayaran</label><input id="buyer-payment-proof" type="file" accept="image/*" class="w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-500 file:px-3 file:py-2 file:font-bold file:text-slate-950"><p class="text-[10px] text-slate-500 mt-1">Upload screenshot bukti pembayaran setelah transfer.</p></div>
@@ -1040,9 +1041,9 @@
             <button 
               onclick="${isJualItem(item) ? `openSellModal(${item.id})` : `openCartModal(${item.id})`}" 
               ${isOut && !isJualItem(item) ? 'disabled' : ''} 
-              class="w-full text-center ${isOut && !isJualItem(item) ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10'} font-bold py-2.5 px-4 rounded-xl transition duration-200"
+              class="w-full inline-flex items-center justify-center gap-2 text-center ${isOut && !isJualItem(item) ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10'} font-bold py-2.5 px-4 rounded-xl transition duration-200"
             >
-              ${isJualItem(item) ? 'Ajukan Penjualan' : (isOut ? 'Stok Habis' : 'Tambah ke Keranjang')}
+              ${isJualItem(item) ? `<img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Ajukan Penjualan` : (isOut ? `<span class="w-5 h-5 inline-flex items-center justify-center">×</span>Stok Habis` : `<img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Tambah ke Keranjang`)}
             </button>
             ${isAdmin ? `
               <div class="flex gap-2 mt-3 pt-3 border-t border-slate-800">
@@ -1436,7 +1437,7 @@
       if(!box)return;
       if(!cartItems.length){ box.innerHTML=''; box.classList.add('hidden'); if(empty)empty.classList.remove('hidden'); if(total)total.textContent='Rp 0'; return; }
       box.classList.remove('hidden'); if(empty)empty.classList.add('hidden');
-      box.innerHTML=cartItems.map(x=>`<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 flex items-center justify-between gap-2"><div class="min-w-0"><div class="text-xs font-bold text-white truncate">${escapeReviewText(x.product)}</div><div class="text-[10px] text-slate-500">${Number(x.qty)||0} ${cartUnit(x.product)} × Rp ${(Number(x.unit_price)||0).toLocaleString('id-ID')}</div></div><div class="flex items-center gap-1.5 shrink-0"><button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',-1)" class="w-6 h-6 rounded-lg border border-slate-700 text-slate-300">−</button><span class="text-xs font-bold text-white w-4 text-center">${Number(x.qty)||0}</span><button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',1)" class="w-6 h-6 rounded-lg border border-slate-700 text-slate-300">+</button><button type="button" onclick="removeCartItem('${escapeReviewText(x.product_id)}')" class="w-6 h-6 rounded-lg border border-rose-700/40 text-rose-300">×</button></div></div>`).join('');
+      box.innerHTML=cartItems.map(x=>{ const n=String(x.product||'').toLowerCase(); const icon=n.includes('blue gem')||n==='bgl' ? 'assets/bgl.png' : (n.includes('diamond lock')||n==='dl' ? 'assets/dl.png' : 'assets/logo.jpg'); return `<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 flex items-center justify-between gap-2"><div class="flex items-center gap-2 min-w-0"><img src="${icon}" alt="" class="w-8 h-8 object-contain rounded-lg bg-slate-950/70 p-0.5 shrink-0 [image-rendering:pixelated]" aria-hidden="true"><div class="min-w-0"><div class="text-xs font-bold text-white truncate">${escapeReviewText(x.product)}</div><div class="text-[10px] text-slate-500">${Number(x.qty)||0} ${cartUnit(x.product)} × Rp ${(Number(x.unit_price)||0).toLocaleString('id-ID')}</div></div></div><div class="flex items-center gap-1.5 shrink-0"><button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',-1)" class="w-7 h-7 rounded-lg border border-slate-700 text-slate-300">−</button><span class="text-xs font-bold text-white w-4 text-center">${Number(x.qty)||0}</span><button type="button" onclick="changeCartQty('${escapeReviewText(x.product_id)}',1)" class="w-7 h-7 rounded-lg border border-slate-700 text-slate-300">+</button><button type="button" onclick="removeCartItem('${escapeReviewText(x.product_id)}')" class="w-7 h-7 rounded-lg border border-rose-700/40 text-rose-300">×</button></div></div>`}).join('');
       if(total) total.textContent=`Rp ${cartTotal().toLocaleString('id-ID')}`;
     }
     function openCartModal(id) { addToCart(id); }
@@ -1444,6 +1445,8 @@
       loadCartItems();
       renderCartSummary();
       document.getElementById('cart-item-name').textContent=cartItems.length===1 ? cartItems[0].product : 'Keranjang Pesanan';
+      const cartIcon=document.getElementById('cart-header-icon');
+      if(cartIcon){ const n=String(cartItems.length===1 ? cartItems[0].product : '').toLowerCase(); cartIcon.src = n.includes('blue gem')||n==='bgl' ? 'assets/bgl.png' : (n.includes('diamond lock')||n==='dl' ? 'assets/dl.png' : 'assets/logo.jpg'); }
       document.getElementById('cart-item-price').textContent=cartItems.length===1 ? `Rp ${(Number(cartItems[0].unit_price)||0).toLocaleString('id-ID')}` : `${cartItems.length} produk`;
       document.getElementById('cart-qty').value=cartItems.length===1 ? (Number(cartItems[0].qty)||1) : 1;
       document.getElementById('cart-modal').classList.remove('hidden');
