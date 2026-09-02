@@ -825,7 +825,7 @@
         if (!raw) return false;
         const cached = JSON.parse(raw);
         if (!Array.isArray(cached.items) || cached.items.length === 0) return false;
-        itemsData = cached.items;
+        itemsData = applyStockOverrides(cached.items);
         filterProducts();
         return true;
       } catch (e) {
@@ -852,7 +852,7 @@
           const freshItems = await response.json();
           if (!Array.isArray(freshItems)) throw new Error("Format data barang tidak valid");
 
-          itemsData = freshItems;
+          itemsData = applyStockOverrides(freshItems);
           try {
             localStorage.setItem(ITEMS_CACHE_KEY, JSON.stringify({
               savedAt: Date.now(),
@@ -1025,6 +1025,18 @@
       } catch (_) {}
     }
     function clearStockOverrides() { try { localStorage.removeItem(STOCK_CACHE_KEY); } catch (_) {} }
+    function applyStockOverrides(list) {
+      const overrides = getStockOverrides();
+      if (!Array.isArray(list)) return list;
+      return list.map(item => {
+        const key = String(item?.id ?? '');
+        if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
+          const q = Math.max(0, Math.floor(Number(overrides[key]) || 0));
+          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
+        }
+        return item;
+      });
+    }
 
     function getStockQuantity(item) {
       const raw = item?.stock_quantity ?? item?.stock_qty ?? item?.stock ?? item?.quantity;
@@ -1530,7 +1542,7 @@
       const item=itemsData.find(i=>String(i.id)===String(id));
       if(!item || isJualItem(item)) return;
       const stock=getStockQuantity(item);
-      if(stock === 0 || item.stock_status==='empty') { showToast('Stok produk sedang habis.', true); return; }
+      if(stock === 0 || String(item.stock_status || '').toLowerCase()==='empty') { showToast('Stok produk sedang habis.', true); return; }
       const amount=Math.max(1,parseInt(qty,10)||1);
       const existing=cartItems.find(x=>String(x.product_id)===String(item.id));
       const current=existing ? Math.max(0,Number(existing.qty)||0) : 0;
@@ -1540,8 +1552,8 @@
         saveCartItems(); updateCartBadge(); renderCartSummary();
         return;
       }
-      if(existing) existing.qty = current + amount;
-      else cartItems.push({product_id:item.id, product:item.name, unit_price:Number(item.price)||0, qty:amount});
+      if(existing) { existing.qty = current + amount; if (!existing.local_image) existing.local_image = cartProductIcon(item.name); }
+      else cartItems.push({product_id:item.id, product:item.name, unit_price:Number(item.price)||0, qty:amount, local_image: cartProductIcon(item.name)});
       saveCartItems();
       playCyberBeep(900,'sine',0.06);
       // Tetap di katalog; pesanan diperbarui tanpa membuka modal.
@@ -2055,7 +2067,8 @@ Terima kasih 🙏`;
         document.getElementById("item-image").value = item.image_url || "";
         document.getElementById("item-type").value = (item.type || 'beli').toLowerCase();
         document.getElementById("item-status").value = item.stock_status || "ready";
-        document.getElementById("item-stock-qty").value = getStockQuantity(item) ?? "";
+        const savedOverride = getStockOverrides()[String(item.id)];
+        document.getElementById("item-stock-qty").value = savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "");
         document.getElementById("form-btn").innerText = "Simpan Perubahan";
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -2080,6 +2093,7 @@ Terima kasih 🙏`;
           throw new Error(`Gagal menyimpan produk (${response.status})${detail ? `: ${detail}` : ''}`);
         }
 
+        if (id && stock_quantity !== null) setStockOverride(id, stock_quantity);
         resetForm();
         itemsLoadPromise = null;
         await loadItems();
