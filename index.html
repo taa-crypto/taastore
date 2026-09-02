@@ -771,6 +771,7 @@
     let activeFilter = 'all';
     let selectedItem = null;
     let cartItems = [];
+    // Cart image paths are normalized when the cart is opened.
     const CART_KEY = "taastore_cart_v1";
     const defaultReviews = [];
     const ORDERS_KEY = "taastore_orders_v1";
@@ -837,6 +838,7 @@
     async function loadItems() {
       if (itemsLoadPromise) return itemsLoadPromise;
 
+      remoteStockMap = getRemoteStockCache();
       const hadCachedItems = renderCachedItems();
       const loadingEl = document.getElementById("loading");
       if (hadCachedItems && loadingEl) loadingEl.classList.add("hidden");
@@ -862,6 +864,7 @@
             console.warn("TAASTORE cache write error", e);
           }
           filterProducts();
+          await loadRemoteStock();
         } catch (err) {
           console.error("TAASTORE items load error:", err);
           if (!hadCachedItems && loadingEl) {
@@ -1014,6 +1017,98 @@
       loadGlobalFavorites();
     }
     const STOCK_CACHE_KEY = "taastore_stock_overrides_v1";
+    const STOCK_REMOTE_CACHE_KEY = "taastore_remote_stock_v1";
+    let remoteStockMap = {};
+    let remoteStockLoaded = false;
+
+    function getRemoteStockCache() {
+      try { return JSON.parse(localStorage.getItem(STOCK_REMOTE_CACHE_KEY) || "{}"); } catch (_) { return {}; }
+    }
+    function saveRemoteStockCache(map) {
+      try { localStorage.setItem(STOCK_REMOTE_CACHE_KEY, JSON.stringify(map || {})); } catch (_) {}
+    }
+    function mergeStockMap(list, map) {
+      if (!Array.isArray(list)) return list;
+      const source = map || {};
+      return list.map(item => {
+        const key = String(item?.id ?? '');
+        if (key && Object.prototype.hasOwnProperty.call(source, key)) {
+          const q = Math.max(0, Math.floor(Number(source[key]) || 0));
+          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
+        }
+        return item;
+      });
+    }
+    async function loadRemoteStock() {
+      const cached = getRemoteStockCache();
+      if (cached && typeof cached === 'object' && Object.keys(cached).length) {
+        remoteStockMap = cached;
+        remoteStockLoaded = true;
+        itemsData = mergeStockMap(itemsData, remoteStockMap);
+      }
+      try {
+        const rows = await supabaseRequest('product_stock?select=product_id,stock_quantity');
+        const map = {};
+        (Array.isArray(rows) ? rows : []).forEach(row => {
+          if (row?.product_id !== undefined && row?.product_id !== null) map[String(row.product_id)] = Math.max(0, Math.floor(Number(row.stock_quantity) || 0));
+        });
+        remoteStockMap = map;
+        remoteStockLoaded = true;
+        saveRemoteStockCache(map);
+        itemsData = mergeStockMap(itemsData, map);
+        filterProducts();
+        return true;
+      } catch (err) {
+        remoteStockLoaded = false;
+        console.warn('TAASTORE remote stock unavailable; using backend/local stock:', err);
+        return false;
+      }
+    }
+    async function saveRemoteStock(productId, quantity) {
+      const q = Math.max(0, Math.floor(Number(quantity) || 0));
+      const key = String(productId ?? '');
+      if (!key) return false;
+      try {
+        await supabaseRequest(`product_stock?on_conflict=product_id`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=minimal'
+          },
+          body: JSON.stringify({ product_id: Number(productId), stock_quantity: q })
+        });
+        remoteStockMap[key] = q;
+        saveRemoteStockCache(remoteStockMap);
+        return true;
+      } catch (err) {
+        console.warn('TAASTORE remote stock save failed:', err);
+        return false;
+      }
+    }
+
+    async function decrementRemoteStock(productId, amount) {
+      const key = String(productId ?? '');
+      const n = Math.max(0, Math.floor(Number(amount) || 0));
+      if (!key || n <= 0) return true;
+      try {
+        const rows = await supabaseRequest(`product_stock?select=product_id,stock_quantity&product_id=eq.${encodeURIComponent(key)}&limit=1`);
+        if (!Array.isArray(rows) || !rows[0]) throw new Error('Stok server tidak ditemukan.');
+        const current = Math.max(0, Math.floor(Number(rows[0].stock_quantity) || 0));
+        if (current < n) throw new Error(`Stok tidak cukup untuk produk ${key}.`);
+        const next = current - n;
+        await supabaseRequest(`product_stock?product_id=eq.${encodeURIComponent(key)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ stock_quantity: next })
+        });
+        remoteStockMap[key] = next;
+        saveRemoteStockCache(remoteStockMap);
+        return true;
+      } catch (err) {
+        console.warn('TAASTORE remote stock decrement failed:', err);
+        return false;
+      }
+    }
     function getStockOverrides() {
       try { return JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || "{}"); } catch (_) { return {}; }
     }
@@ -1030,6 +1125,10 @@
       if (!Array.isArray(list)) return list;
       return list.map(item => {
         const key = String(item?.id ?? '');
+        if (key && Object.prototype.hasOwnProperty.call(remoteStockMap, key)) {
+          const q = Math.max(0, Math.floor(Number(remoteStockMap[key]) || 0));
+          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
+        }
         if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
           const q = Math.max(0, Math.floor(Number(overrides[key]) || 0));
           return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
@@ -1570,10 +1669,19 @@
     }
     function removeCartItem(productId) { cartItems=cartItems.filter(x=>String(x.product_id)!==String(productId)); saveCartItems(); renderCartSummary(); }
     function cartProductIcon(name) {
-      const n=String(name||'').toLowerCase();
-      if(n.includes('blue gem lock') || n==='bgl' || n.includes('blue gemlock')) return 'assets/bgl.png';
-      if(n.includes('diamond lock') || n==='dl' || n.includes('diamondlock')) return 'assets/dl.png';
-      return 'assets/logo.jpg';
+      const n=String(name||'').toLowerCase().trim();
+      if(n.includes('blue gem lock') || n==='bgl' || n.includes('blue gemlock')) return './assets/bgl.png';
+      if(n.includes('diamond lock') || n==='dl' || n.includes('diamondlock')) return './assets/dl.png';
+      return './assets/logo.jpg';
+    }
+    function normalizeCartImages() {
+      let changed = false;
+      cartItems = cartItems.map(x => {
+        const expected = cartProductIcon(x?.product);
+        if (x.local_image !== expected) { changed = true; return { ...x, local_image: expected }; }
+        return x;
+      });
+      if (changed) saveCartItems();
     }
     function renderCartSummary() {
       const box=document.getElementById('cart-items-summary'), empty=document.getElementById('cart-empty-message'), total=document.getElementById('cart-total-price');
@@ -1585,10 +1693,10 @@
         const unit=cartUnit(x.product);
         const unitPrice=Number(x.unit_price)||0;
         const lineTotal=unitPrice*qty;
-        const icon = x.local_image || cartProductIcon(x.product);
+          const icon = cartProductIcon(x.product);
         return `<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
           <div class="flex items-center gap-3">
-            <img src="${icon}" alt="" class="w-12 h-12 rounded-xl object-contain bg-slate-900/80 border border-slate-800 p-1.5 shrink-0 [image-rendering:pixelated]" aria-hidden="true">
+            <img src="${icon}" alt="" class="w-12 h-12 rounded-xl object-contain bg-slate-900/80 border border-slate-800 p-1.5 shrink-0 [image-rendering:pixelated]" aria-hidden="true" onerror="this.onerror=null;this.src='./assets/logo.jpg'">
             <div class="min-w-0 flex-1">
               <div class="text-sm font-black text-white truncate">${escapeReviewText(x.product)}</div>
               <div class="text-[11px] text-slate-500 mt-0.5">Rp ${unitPrice.toLocaleString('id-ID')} / unit</div>
@@ -1611,6 +1719,7 @@
     function openCartModal(id) { addToCart(id,1); }
     function openCartCheckout() {
       loadCartItems();
+      normalizeCartImages();
       renderCartSummary();
       const name=document.getElementById('cart-item-name');
       if(name) name.textContent=cartItems.length===1 ? cartItems[0].product : 'Pesanan';
@@ -1680,16 +1789,16 @@
         const stockResponse=await fetch(`${API_URL}/items`,{cache:'no-store',headers:{'Accept':'application/json'}});
         if(stockResponse.ok){
           const freshItems=await stockResponse.json();
-          if(Array.isArray(freshItems)){
-            itemsData=freshItems;
-            for(const cart of cartItems){
-              const latest=freshItems.find(x=>String(x.id)===String(cart.product_id));
-              const stock=getStockQuantity(latest);
-              if(latest && stock !== null && (stock===0 || Number(cart.qty)>stock)){
-                showToast(stock===0 ? `${latest.name} sudah habis.` : `Stok ${latest.name} tersisa ${stock}.`,true);
-                filterProducts(); renderCartSummary(); return;
-              }
-            }
+          if(Array.isArray(freshItems)) itemsData=applyStockOverrides(freshItems);
+        }
+        await loadRemoteStock();
+        itemsData=applyStockOverrides(itemsData);
+        for(const cart of cartItems){
+          const latest=itemsData.find(x=>String(x.id)===String(cart.product_id));
+          const stock=getStockQuantity(latest);
+          if(latest && stock !== null && (stock===0 || Number(cart.qty)>stock)){
+            showToast(stock===0 ? `${latest.name} sudah habis.` : `Stok ${latest.name} tersisa ${stock}.`,true);
+            filterProducts(); renderCartSummary(); return;
           }
         }
       }catch(stockErr){ console.warn('TAASTORE stock re-check failed:',stockErr); }
@@ -1699,12 +1808,30 @@
       const productSummary=cartItems.map(x=>`${x.qty} ${cartUnit(x.product)} ${x.product}`).join(' + ');
       const totalQty=cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0);
       const order={order_id:orderId,buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:new Date().toISOString(),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
+      const reservedStocks=[];
       try {
+        for (const cart of cartItems) {
+          const ok = await decrementRemoteStock(cart.product_id, cart.qty);
+          if (!ok) throw new Error(`Gagal mengurangi stok ${cart.product}. Silakan coba lagi.`);
+          reservedStocks.push({ product_id: cart.product_id, qty: Number(cart.qty) || 0 });
+        }
         await supabaseRequest('orders',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(order)});
       } catch(err){
-        console.error('TAASTORE Supabase order insert error:',err);
+        for (const reserved of reservedStocks) {
+          try {
+            const rows = await supabaseRequest(`product_stock?select=stock_quantity&product_id=eq.${encodeURIComponent(String(reserved.product_id))}&limit=1`);
+            const current = Array.isArray(rows) && rows[0] ? Math.max(0, Math.floor(Number(rows[0].stock_quantity) || 0)) : 0;
+            await saveRemoteStock(reserved.product_id, current + reserved.qty);
+          } catch (restoreErr) {
+            console.warn('TAASTORE stock restore failed:', restoreErr);
+          }
+        }
+        console.error('TAASTORE order/stock error:',err);
         const detail=[err.message,err.code?`code: ${err.code}`:'',err.hint?`hint: ${err.hint}`:''].filter(Boolean).join(' | ');
-        showToast(`Order gagal disimpan: ${detail||'cek koneksi Supabase'}`,true); return;
+        showToast(`Order gagal disimpan: ${detail||'cek koneksi Supabase'}`,true);
+        await loadRemoteStock();
+        filterProducts();
+        return;
       }
       const orders=getOrders(); orders.unshift({...order,cart_items:cartItems.map(x=>({...x}))}); saveOrders(orders);
       localStorage.setItem('taastore_last_order_id',orderId);
@@ -1732,7 +1859,7 @@
         const items=Array.isArray(order?.cart_items)&&order.cart_items.length ? order.cart_items : [{product:order?.product||'Pesanan',unit_price:Number(order?.total||0),qty:Number(order?.qty||1)}];
         box.innerHTML=items.map(x=>{
           const unit=cartUnit(x.product), qty=Math.max(1,Number(x.qty)||1), icon=cartProductIcon(x.product);
-          return `<div class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2"><img src="${icon}" alt="" class="w-9 h-9 object-contain [image-rendering:pixelated]" onerror="this.onerror=null;this.src='assets/logo.jpg'"><div class="min-w-0 flex-1"><div class="text-xs font-black text-white truncate">${escapeReviewText(x.product)}</div><div class="text-[10px] text-slate-500">${qty} ${unit}</div></div></div>`;
+          return `<div class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2"><img src="${icon}" alt="" class="w-9 h-9 object-contain [image-rendering:pixelated]" onerror="this.onerror=null;this.src='./assets/logo.jpg'"><div class="min-w-0 flex-1"><div class="text-xs font-black text-white truncate">${escapeReviewText(x.product)}</div><div class="text-[10px] text-slate-500">${qty} ${unit}</div></div></div>`;
         }).join('');
       }
       document.getElementById('order-success-modal')?.classList.remove('hidden');
@@ -1753,7 +1880,7 @@
         const qty=Math.max(1,Number(x.qty)||1);
         const subtotal=(Number(x.unit_price)||0)*qty;
         return `<div class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-          <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0"><img src="${icon}" alt="" class="w-9 h-9 object-contain [image-rendering:pixelated]" onerror="this.onerror=null;this.src='assets/logo.jpg'"></div>
+          <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0"><img src="${icon}" alt="" class="w-9 h-9 object-contain [image-rendering:pixelated]" onerror="this.onerror=null;this.src='./assets/logo.jpg'"></div>
           <div class="min-w-0 flex-1"><div class="text-xs font-black text-white truncate">${escapeReviewText(x.product)}</div><div class="text-[10px] text-slate-500">${qty} ${unit} × Rp ${(Number(x.unit_price)||0).toLocaleString('id-ID')}</div></div>
           <div class="text-xs font-black text-amber-400">Rp ${subtotal.toLocaleString('id-ID')}</div>
         </div>`;
@@ -2092,8 +2219,15 @@ Terima kasih 🙏`;
           const detail = await response.text().catch(() => '');
           throw new Error(`Gagal menyimpan produk (${response.status})${detail ? `: ${detail}` : ''}`);
         }
+        let savedProduct = null;
+        try { savedProduct = await response.json(); } catch (_) {}
+        const savedId = id || (Array.isArray(savedProduct) ? savedProduct[0]?.id : null) || savedProduct?.id || savedProduct?.item?.id || savedProduct?.data?.id || '';
 
-        if (id && stock_quantity !== null) setStockOverride(id, stock_quantity);
+        if (savedId && stock_quantity !== null) {
+          setStockOverride(savedId, stock_quantity);
+          const remoteSaved = await saveRemoteStock(savedId, stock_quantity);
+          if (!remoteSaved) throw new Error('Produk tersimpan, tetapi stok server gagal disimpan.');
+        }
         resetForm();
         itemsLoadPromise = null;
         await loadItems();
@@ -2129,6 +2263,7 @@ Terima kasih 🙏`;
     }
     loadCartItems();
     loadItems();
+    loadRemoteStock();
     loadReviews();
     loadBuyerOrders();
   </script>
