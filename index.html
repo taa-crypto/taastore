@@ -853,36 +853,10 @@
           if (!Array.isArray(freshItems)) throw new Error("Format data barang tidak valid");
 
           itemsData = freshItems;
-          // Stock quantity is sourced directly from Supabase so the Admin Panel
-          // and customer catalog stay in sync even if the legacy backend /items
-          // endpoint does not yet expose the new column.
-          try {
-            const stockRows = await supabaseRequest('items?select=id,stock_quantity,stock_status');
-            if (Array.isArray(stockRows)) {
-              const stockMap = new Map(stockRows.map(r => [String(r.id), r]));
-              itemsData = freshItems.map(it => {
-                const row = stockMap.get(String(it.id));
-                return row ? { ...it, stock_quantity: row.stock_quantity, stock_status: row.stock_status || it.stock_status } : it;
-              });
-            }
-          } catch (stockErr) {
-            console.warn('TAASTORE stock sync read skipped:', stockErr);
-          }
-          try {
-            const overrides = getStockOverrides();
-            let changed = false;
-            freshItems.forEach(it => {
-              const raw = it?.stock_quantity ?? it?.stock_qty ?? it?.stock ?? it?.quantity;
-              if (raw !== undefined && raw !== null && raw !== '' && Number.isFinite(Number(raw))) {
-                if (Object.prototype.hasOwnProperty.call(overrides, String(it.id))) { delete overrides[String(it.id)]; changed = true; }
-              }
-            });
-            if (changed) localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(overrides));
-          } catch (_) {}
           try {
             localStorage.setItem(ITEMS_CACHE_KEY, JSON.stringify({
               savedAt: Date.now(),
-              items: freshItems
+              items: itemsData
             }));
           } catch (e) {
             console.warn("TAASTORE cache write error", e);
@@ -1056,11 +1030,6 @@
       const raw = item?.stock_quantity ?? item?.stock_qty ?? item?.stock ?? item?.quantity;
       if (raw !== undefined && raw !== null && raw !== '') {
         const n = Number(raw);
-        if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
-      }
-      const override = getStockOverrides()[String(item?.id ?? '')];
-      if (override !== undefined && override !== null && override !== '') {
-        const n = Number(override);
         if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
       }
       if (String(item?.stock_status || '').toLowerCase() === 'empty') return 0;
@@ -1604,7 +1573,7 @@
         const unit=cartUnit(x.product);
         const unitPrice=Number(x.unit_price)||0;
         const lineTotal=unitPrice*qty;
-        const icon = cartProductIcon(x.product);
+        const icon = x.local_image || cartProductIcon(x.product);
         return `<div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
           <div class="flex items-center gap-3">
             <img src="${icon}" alt="" class="w-12 h-12 rounded-xl object-contain bg-slate-900/80 border border-slate-800 p-1.5 shrink-0 [image-rendering:pixelated]" aria-hidden="true">
@@ -2106,22 +2075,11 @@ Terima kasih 🙏`;
       try {
         const url = id ? `${API_URL}/items/${id}` : `${API_URL}/items`;
         const response = await fetch(url, { method: id ? "PUT" : "POST", headers, body: JSON.stringify(payload) });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        // Persist the numeric stock directly to Supabase. The public update
-        // policy in this test build allows the Admin Panel to update items.
-        if (id && stock_quantity !== null) {
-          const stockResponse = await fetch(`${SUPABASE_REST}/items?id=eq.${encodeURIComponent(id)}`, {
-            method: 'PATCH',
-            headers: { ...supabaseHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ stock_quantity, stock_status })
-          });
-          if (!stockResponse.ok) {
-            const detail = await stockResponse.text();
-            throw new Error(`Gagal menyimpan stok ke Supabase (${stockResponse.status}): ${detail}`);
-          }
-          setStockOverride(id, stock_quantity);
+        if (!response.ok) {
+          const detail = await response.text().catch(() => '');
+          throw new Error(`Gagal menyimpan produk (${response.status})${detail ? `: ${detail}` : ''}`);
         }
+
         resetForm();
         itemsLoadPromise = null;
         await loadItems();
