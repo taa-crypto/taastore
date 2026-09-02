@@ -1616,7 +1616,34 @@ Terima kasih 🙏`;
     }
     window.taastoreSellProofCache = window.taastoreSellProofCache || {};
     window.taastoreBuyerProofCache = window.taastoreBuyerProofCache || {};
-    function openBuyerProof(orderId) { const id=String(orderId||''); const order=getOrders().find(o=>String(o.order_id)===id); const data=window.taastoreBuyerProofCache[id] || order?.buyer_proof_data; if(!isAdmin)return;if(!data||typeof data!=='string'||!data.startsWith('data:image/')){showToast('Bukti pembayaran tidak tersedia atau format gambar tidak valid.',true);return;}const modal=document.getElementById('buyer-proof-modal'),image=document.getElementById('buyer-proof-image'),label=document.getElementById('buyer-proof-order-id');if(!modal||!image)return;label.textContent=id;image.onload=()=>modal.classList.remove('hidden');image.onerror=()=>{image.removeAttribute('src');showToast('Gambar bukti pembayaran tidak dapat ditampilkan.',true)};image.src=data; }
+    async function openBuyerProof(orderId) {
+      if (!isAdmin) return;
+      const id = String(orderId || '');
+      if (!id) return;
+      const modal = document.getElementById('buyer-proof-modal');
+      const image = document.getElementById('buyer-proof-image');
+      const label = document.getElementById('buyer-proof-order-id');
+      if (!modal || !image) return;
+      label.textContent = id;
+      let data = window.taastoreBuyerProofCache[id] || getOrders().find(o => String(o.order_id) === id)?.buyer_proof_data || '';
+      try {
+        if (!data || typeof data !== 'string' || !data.startsWith('data:image/')) {
+          const fresh = await supabaseRequest(`orders?select=order_id,buyer_proof_data&order_id=eq.${encodeURIComponent(id)}&limit=1`);
+          data = Array.isArray(fresh) && fresh[0] ? fresh[0].buyer_proof_data : '';
+          if (data) window.taastoreBuyerProofCache[id] = data;
+        }
+      } catch (err) {
+        console.error('TAASTORE openBuyerProof fetch error:', err);
+      }
+      if (!data || typeof data !== 'string' || !data.startsWith('data:image/')) {
+        showToast('Bukti pembayaran tidak tersedia.', true);
+        return;
+      }
+      image.onload = () => modal.classList.remove('hidden');
+      image.onerror = () => { image.removeAttribute('src'); modal.classList.add('hidden'); showToast('Gambar bukti pembayaran tidak dapat ditampilkan.', true); };
+      image.src = data;
+      modal.classList.remove('hidden');
+    }
     function closeBuyerProof(){const modal=document.getElementById('buyer-proof-modal'),image=document.getElementById('buyer-proof-image');if(modal)modal.classList.add('hidden');if(image){image.onload=null;image.onerror=null;image.removeAttribute('src')}}
     async function markBuyerPaid(orderId){if(!isAdmin||!orderId)return;try{const paidAt=new Date().toISOString();await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`,{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({status:'PAID',paid_at:paidAt})});const local=getOrders(),i=local.findIndex(o=>o.order_id===orderId);if(i>=0){local[i].status='PAID';local[i].paid_at=paidAt;saveOrders(local);}await loadAdminOrders();await loadBuyerOrders();showToast(`Pembayaran ${orderId} ditandai diterima.`)}catch(err){showToast('Gagal menandai pembayaran.',true);console.error(err)}}
 
@@ -1685,16 +1712,35 @@ Terima kasih 🙏`;
     }
 
     async function deleteHistoryOrder(orderId) {
-      if(!isAdmin || !orderId) return;
-      const id=String(orderId);
-      if(!confirm(`Hapus riwayat pesanan ${id}? Pesanan yang dihapus tidak dapat dipulihkan.`)) return;
+      if (!isAdmin || !orderId) return;
+      const id = String(orderId);
+      if (!confirm(`Hapus riwayat pesanan ${id}? Pesanan yang dihapus tidak dapat dipulihkan.`)) return;
       try {
-        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{'Prefer':'return=minimal'}});
-        const local=getOrders().filter(o=>String(o.order_id)!==id); saveOrders(local);
-        await loadAdminOrders(); await loadBuyerOrders(); showToast(`Riwayat ${id} berhasil dihapus.`);
-      } catch(err){
-        const detail=[err.message,err.code?`code: ${err.code}`:'',err.hint?`hint: ${err.hint}`:''].filter(Boolean).join(' | ');
-        showToast(`Gagal menghapus riwayat: ${detail||'cek izin DELETE Supabase'}`,true); console.error('TAASTORE deleteHistoryOrder error:',err);
+        const response = await fetch('/api/admin-delete-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': adminKey
+          },
+          body: JSON.stringify({ order_id: id })
+        });
+        let result = {};
+        try { result = await response.json(); } catch (_) {}
+        if (!response.ok || !result.ok) {
+          const detail = result.detail || result.error || `HTTP ${response.status}`;
+          throw new Error(detail);
+        }
+        const local = getOrders().filter(o => String(o.order_id) !== id);
+        saveOrders(local);
+        delete window.taastoreBuyerProofCache[id];
+        delete window.taastoreSellProofCache[id];
+        await loadAdminOrders();
+        await loadBuyerOrders();
+        showToast(`Riwayat ${id} berhasil dihapus.`);
+      } catch (err) {
+        const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | ');
+        showToast(`Gagal menghapus riwayat: ${detail || 'server admin belum dikonfigurasi'}`, true);
+        console.error('TAASTORE deleteHistoryOrder error:', err);
       }
     }
 
