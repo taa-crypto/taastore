@@ -344,6 +344,29 @@
             <p class="text-[10px] text-cyan-400 font-semibold tracking-widest uppercase">Gems & Items Marketplace</p>
           </div>
         </div>
+        <!-- Navigasi utama: Beranda + menu 3 titik -->
+        <div class="flex items-center gap-2 order-last md:order-none md:ml-auto">
+          <a href="index.html" title="Kembali ke Beranda" aria-label="Kembali ke Beranda" class="hidden sm:flex items-center gap-2 px-3 py-2 bg-slate-800/70 hover:bg-slate-700 text-slate-300 border border-slate-700/80 rounded-lg text-xs font-bold transition">
+            <i class="fa-solid fa-house"></i>
+            <span>Beranda</span>
+          </a>
+          <div class="relative">
+            <button id="market-menu-btn" type="button" onclick="toggleMarketMenu()" aria-label="Buka menu TAASTORE" aria-expanded="false" class="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition">
+              <span class="flex flex-col gap-1 items-center" aria-hidden="true">
+                <span class="w-5 h-0.5 rounded-full bg-current"></span>
+                <span class="w-5 h-0.5 rounded-full bg-current"></span>
+                <span class="w-5 h-0.5 rounded-full bg-current"></span>
+              </span>
+            </button>
+            <div id="market-menu" class="hidden absolute right-0 top-12 z-[80] w-52 rounded-2xl border border-slate-700 bg-slate-950/95 backdrop-blur-xl shadow-2xl p-2">
+              <a href="index.html" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-sm text-slate-200 transition"><i class="fa-solid fa-house w-4 text-center"></i> Beranda</a>
+              <a href="marketplace.html" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-sm text-amber-300 transition"><i class="fa-solid fa-store w-4 text-center"></i> Marketplace</a>
+              <a href="tools.html" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-sm text-slate-200 transition"><i class="fa-solid fa-screwdriver-wrench w-4 text-center"></i> TAASTORE Tools</a>
+              <button type="button" onclick="toggleAdminPanel();closeMarketMenu()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-sm text-slate-200 transition text-left"><i class="fa-solid fa-user-shield w-4 text-center"></i> Admin Login</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Tombol Media Sosial & FITUR 1: Audio BGM Player Toggle -->
         <div class="flex items-center gap-2 md:gap-3">
           <!-- Tombol Music Visualizer Player -->
@@ -3490,5 +3513,25 @@ Terima kasih 🙏`;
       animate();
     })();
   </script>
+<script>
+function toggleMarketMenu(){
+  const menu=document.getElementById('market-menu');
+  const btn=document.getElementById('market-menu-btn');
+  if(!menu||!btn) return;
+  const open=menu.classList.toggle('hidden')===false;
+  btn.setAttribute('aria-expanded',open?'true':'false');
+}
+function closeMarketMenu(){
+  const menu=document.getElementById('market-menu');
+  const btn=document.getElementById('market-menu-btn');
+  if(menu) menu.classList.add('hidden');
+  if(btn) btn.setAttribute('aria-expanded','false');
+}
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('market-menu-btn')?.parentElement;
+  if(wrap && !wrap.contains(e.target)) closeMarketMenu();
+});
+</script>
+
 </body>
 </html>
