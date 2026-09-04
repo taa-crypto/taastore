@@ -68,4 +68,4 @@ function initAuth(){window.addEventListener('DOMContentLoaded',async()=>{const f
 async function initAuthState(){try{await absorbAuthHash();await exchangeAuthCode()}catch(e){const msg=$('authMsg');if(msg)msg.textContent='Login Google gagal: '+e.message}await refreshAuth()}
 initAuth();
 document.addEventListener('click',e=>{const btn=$('hambBtn'),m=$('menu');if(m&&btn&&!btn.contains(e.target)&&!m.contains(e.target))closeMenu()});
-</script></script></body></html>
+</script></body></html>
