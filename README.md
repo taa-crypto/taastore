@@ -1,24 +1,30 @@
-# TAASTORE - Frontend Client 🚀
+# TAASTORE V8.0.0 — Full Tools Layer
 
-Web marketplace resmi TAASTORE untuk transaksi **Gems & Items** secara aman, transparan, dan responsif. Didesain dengan gaya UI cyber/ambient modern, terintegrasi langsung dengan API backend dan WhatsApp CS.
+## What is preserved
+`marketplace.html` is copied from the V7.21.6 Marketplace source. BUY atomic stock, BGL/DL unified stock, JUAL/SELL, orders, proof, favorites, reviews and existing admin logic are not rewritten in this V8 tools build.
 
-## ✨ Fitur Utama
+## New pages
+- `index.html`: Home / landing page.
+- `marketplace.html`: preserved Marketplace.
+- `tools.html`: Vend Locator, GrowScan, World Render and Premium Rental UI.
+- `supabase_tools.sql`: new tables only.
+- `supabase_stock_rpc.sql`: existing V7.21.6 stock RPC.
 
-- **Catalog & Filtering**: Pencarian dinamis dan filter produk berdasarkan kategori (Katalog Beli & Jual).
-- **Interactive Cart & Checkout**: Form pemesanan otomatis yang terhubung ke WhatsApp CS.
-- **Dynamic Reviews System**: Sistem ulasan pelanggan organik (empty-state dari nol tanpa manipulasi data).
-- **Admin Panel**: Akses terproteksi password untuk menambah, mengubah, dan menghapus produk (*CRUD*).
-- **Interactive UI/UX**: Dilengkapi *seamless infinite loop marquee*, ambient visual effects, dan responsif di semua perangkat.
+## Supabase
+Run `supabase_tools.sql` once in SQL Editor. Do not delete existing Marketplace tables. Supabase Auth email/password is used by the new account UI.
 
-## 🛠️ Tech Stack
+## Vend data
+The frontend is deliberately provider-agnostic. If `localStorage.taastore_vend_provider_url` exists, it calls `<provider>?item=...`; otherwise it reads the read-only `vend_listings` cache. A real community/provider feed must be connected before claiming live all-world coverage. No fake listings are generated.
 
-- **HTML5 & CSS3**
-- **Tailwind CSS** (via CDN)
-- **Vanilla JavaScript (ES6+)**
-- **Local Storage** (Sistem ulasan lokal)
+Expected normalized listing object:
+`item_name, world_name, price_text, machine_x, machine_y, source, source_listing_id, updated_at`.
 
-## ⚡ Cara Menjalankan Skenario Lokal
+The data ingestion job/backend should use a provider that permits this use. Do not expose Supabase service-role keys in frontend code.
 
-1. Clone repositori ini:
-   ```bash
-   git clone [https://github.com/azkafazapranajaya2007-cell/taastore-frontend.git](https://github.com/azkafazapranajaya2007-cell/taastore-frontend.git)
+## Rental
+Normal users can read plans and their own subscriptions. They cannot write/activate subscriptions from the browser. Activation should be done by the admin/secure backend after payment verification. This prevents users from granting themselves Premium by editing frontend state.
+
+## Test
+- `unzip -t` passes.
+- Inline JavaScript checked with Node syntax checker.
+- Marketplace source preserved separately as `marketplace.html`.
