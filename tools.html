@@ -30,7 +30,7 @@ function openAuth(){const m=$('authModal');if(!m)return;m.classList.add('open');
 function closeAuth(){$('authModal')?.classList.remove('open')}
 function toggleAuthMode(){signup=!signup;$('authTitle').textContent=signup?'Daftar TAASTORE':'Login TAASTORE';$('authSwitch').textContent=signup?'Sudah punya akun? Login':'Belum punya akun? Daftar'}
 function redirectUri(){return window.location.origin+window.location.pathname}
-function base64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function base64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function randomVerifier(n=64){const a=new Uint8Array(n);crypto.getRandomValues(a);return base64Url(a)}
 async function pkceChallenge(v){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return base64Url(new Uint8Array(h))}
 async function loginGoogle(){try{const v=randomVerifier();localStorage.setItem('taastore_pkce_verifier',v);const c=await pkceChallenge(v);const p=new URLSearchParams({provider:'google',redirect_to:redirectUri(),code_challenge:c,code_challenge_method:'S256'});window.location.assign(SB+'/auth/v1/authorize?'+p.toString())}catch(e){const x=$('authMsg');if(x)x.textContent='Google Login gagal disiapkan: '+e.message}}
