@@ -145,15 +145,10 @@ async function loadAdminPremiumHistory(){
 
 async function loadMyPremiumOrdersData(){
   if(!currentUser||currentIsAdmin) return [];
-  let rpcError=null;
-  try{
-    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
-    if(Array.isArray(rows)) return rows;
-    if(rows&&Array.isArray(rows.data)) return rows.data;
-  }catch(e){rpcError=e}
-  // Fallback langsung ke tabel. RLS policy 'user reads own premium orders'
-  // membatasi hasil ke user yang sedang login. Ini juga menghindari masalah
-  // cache/schema PostgREST pada RPC tanpa mengubah database.
+  // Primary path: same direct table access used by the known-working V15.7 build.
+  // RLS already limits premium_orders to auth.uid(), so do not depend on the RPC
+  // returning a non-empty value before trying the direct query.
+  let directError=null;
   try{
     const qs=new URLSearchParams({
       select:'order_id,user_id,package,duration,amount,payment_proof,status,created_at,verified_at',
@@ -161,11 +156,19 @@ async function loadMyPremiumOrdersData(){
       order:'created_at.desc'
     });
     const rows=await req('/rest/v1/premium_orders?'+qs.toString());
-    return Array.isArray(rows)?rows:[];
-  }catch(restError){
-    restError.rpcError=rpcError;
-    throw restError;
+    if(Array.isArray(rows)) return rows;
+  }catch(e){directError=e}
+
+  // Secondary path: RPC for environments where direct PostgREST access is unavailable.
+  try{
+    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
+    if(Array.isArray(rows)) return rows;
+    if(rows&&Array.isArray(rows.data)) return rows.data;
+  }catch(e){
+    e.directError=directError;
+    throw e;
   }
+  return [];
 }
 
 async function loadAccountOrders(){
