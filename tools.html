@@ -130,10 +130,10 @@ async function loadAccountOrders(){
   msg.textContent='Memuat pesanan Premium yang masih berjalan...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
   try{
-    const qs=new URLSearchParams({select:'order_id,package,package_id,duration,duration_days,amount,payment_proof_path,payment_proof,status,created_at,verified_at',user_id:'eq.'+currentUser.id,order:'created_at.desc',limit:'30'});
+    const qs=new URLSearchParams({select:'order_id,user_id,package,duration,amount,payment_proof,status,created_at,verified_at',user_id:'eq.'+currentUser.id,order:'created_at.desc',limit:'30'});
     const rows=await req('/rest/v1/premium_orders?'+qs.toString());
     const all=Array.isArray(rows)?rows:[];
-    const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION')));
+    const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION').toUpperCase()));
     if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
     msg.textContent=arr.length+' pesanan Premium sedang berjalan';
     list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>'}).join('');
@@ -144,10 +144,10 @@ async function loadAccountPremiumHistory(){
   msg.textContent='Memuat riwayat Premium...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Gunakan Riwayat Premium Admin.':'Login diperlukan.';return}
   try{
-    const qs=new URLSearchParams({select:'order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at',user_id:'eq.'+currentUser.id,order:'created_at.desc',limit:'50'});
+    const qs=new URLSearchParams({select:'order_id,user_id,package,duration,amount,status,created_at,verified_at',user_id:'eq.'+currentUser.id,order:'created_at.desc',limit:'50'});
     const rows=await req('/rest/v1/premium_orders?'+qs.toString());
     const cutoff=Date.now()-30*24*60*60*1000;
-    const arr=(Array.isArray(rows)?rows:[]).filter(o=>String(o.status||'')!=='PENDING_VERIFICATION'&&new Date(o.created_at||0).getTime()>=cutoff);
+    const arr=(Array.isArray(rows)?rows:[]).filter(o=>{const st=String(o.status||'').toUpperCase();return !['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(st)&&new Date(o.created_at||0).getTime()>=cutoff});
     if(!arr.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
     msg.textContent=arr.length+' transaksi Premium';
     list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'');const date=o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-';const verified=o.verified_at?new Date(o.verified_at).toLocaleString('id-ID'):'';return '<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">Dibuat: '+escAccount(date)+(verified?' · Diverifikasi: '+escAccount(verified):'')+'</div></div>'}).join('')+'<div class="text-[10px] text-slate-600 mt-3">Riwayat buyer ditampilkan 30 hari terakhir agar halaman tetap ringkas. Data transaksi tetap tersimpan.</div>';
