@@ -151,7 +151,7 @@ async function submitPremiumProof(){
   if(file.size>8*1024*1024){$('premiumUploadMsg').textContent='Ukuran bukti maksimal 8 MB.';return}
   $('premiumSubmit').disabled=true;$('premiumUploadMsg').textContent='Membuat order...';
   try{
-    const created=await req('/rest/v1/rpc/create_premium_order',{method:'POST',body:JSON.stringify({p_package:selectedPremiumPackage.package_id})});
+    const created=await req('/rest/v1/rpc/create_premium_order_v2',{method:'POST',body:JSON.stringify({p_package:selectedPremiumPackage.package_id})});
     const order=Array.isArray(created)?created[0]:created;
     if(!order?.order_id)throw Error('Order Premium tidak dibuat.');
     const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';
