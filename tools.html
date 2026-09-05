@@ -130,11 +130,12 @@ async function loadAccountOrders(){
   msg.textContent='Memuat pesanan Premium yang masih berjalan...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
   try{
-    const qs=new URLSearchParams({select:'order_id,package,package_id,duration,duration_days,amount,payment_proof_path,payment_proof,status,created_at,verified_at',user_id:'eq.'+currentUser.id,status:'eq.PENDING_VERIFICATION',order:'created_at.desc',limit:'30'});
+    const qs=new URLSearchParams({select:'order_id,package,package_id,duration,duration_days,amount,payment_proof_path,payment_proof,status,created_at,verified_at',user_id:'eq.'+currentUser.id,order:'created_at.desc',limit:'30'});
     const rows=await req('/rest/v1/premium_orders?'+qs.toString());
-    const arr=Array.isArray(rows)?rows:[];
+    const all=Array.isArray(rows)?rows:[];
+    const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION')));
     if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
-    msg.textContent=arr.length+' pesanan Premium menunggu verifikasi';
+    msg.textContent=arr.length+' pesanan Premium sedang berjalan';
     list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>'}).join('');
   }catch(e){msg.textContent='Pesanan Premium belum dapat dimuat. Coba lagi.';console.error(e)}
 }
