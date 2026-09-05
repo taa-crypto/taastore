@@ -125,13 +125,37 @@ async function loadAdminPremiumHistory(){
   try{const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});adminPremiumHistoryRows=Array.isArray(rows)?rows:[];renderAdminPremiumHistory()}catch(e){adminPremiumHistoryRows=[];msg.textContent='Riwayat Premium belum dapat dimuat.';console.error(e)}
 }
 
+async function loadMyPremiumOrdersData(){
+  if(!currentUser||currentIsAdmin) return [];
+  let rpcError=null;
+  try{
+    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
+    if(Array.isArray(rows)) return rows;
+    if(rows&&Array.isArray(rows.data)) return rows.data;
+  }catch(e){rpcError=e}
+  // Fallback langsung ke tabel. RLS policy 'user reads own premium orders'
+  // membatasi hasil ke user yang sedang login. Ini juga menghindari masalah
+  // cache/schema PostgREST pada RPC tanpa mengubah database.
+  try{
+    const qs=new URLSearchParams({
+      select:'order_id,user_id,package,duration,amount,payment_proof,status,created_at,verified_at',
+      user_id:'eq.'+currentUser.id,
+      order:'created_at.desc'
+    });
+    const rows=await req('/rest/v1/premium_orders?'+qs.toString());
+    return Array.isArray(rows)?rows:[];
+  }catch(restError){
+    restError.rpcError=rpcError;
+    throw restError;
+  }
+}
+
 async function loadAccountOrders(){
   const msg=$('accountOrdersMsg'),list=$('accountOrdersList');if(!msg||!list)return;
   msg.textContent='Memuat pesanan Premium yang masih berjalan...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
   try{
-    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
-    const all=Array.isArray(rows)?rows:[];
+    const all=await loadMyPremiumOrdersData();
     const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION').toUpperCase()));
     if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
     msg.textContent=arr.length+' pesanan Premium sedang berjalan';
@@ -143,7 +167,7 @@ async function loadAccountPremiumHistory(){
   msg.textContent='Memuat riwayat Premium...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Gunakan Riwayat Premium Admin.':'Login diperlukan.';return}
   try{
-    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
+    const rows=await loadMyPremiumOrdersData();
     const cutoff=Date.now()-30*24*60*60*1000;
     const arr=(Array.isArray(rows)?rows:[]).filter(o=>{const st=String(o.status||'').toUpperCase();return !['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(st)&&new Date(o.created_at||0).getTime()>=cutoff});
     if(!arr.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
