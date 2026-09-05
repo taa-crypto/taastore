@@ -130,7 +130,7 @@ async function loadAccountOrders(){
   msg.textContent='Memuat pesanan Premium yang masih berjalan...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
   try{
-    const rows=await req('/rest/v1/rpc/get_my_premium_orders',{method:'POST',body:'{}'});
+    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
     const all=Array.isArray(rows)?rows:[];
     const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION').toUpperCase()));
     if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
@@ -143,7 +143,7 @@ async function loadAccountPremiumHistory(){
   msg.textContent='Memuat riwayat Premium...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Gunakan Riwayat Premium Admin.':'Login diperlukan.';return}
   try{
-    const rows=await req('/rest/v1/rpc/get_my_premium_orders',{method:'POST',body:'{}'});
+    const rows=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
     const cutoff=Date.now()-30*24*60*60*1000;
     const arr=(Array.isArray(rows)?rows:[]).filter(o=>{const st=String(o.status||'').toUpperCase();return !['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(st)&&new Date(o.created_at||0).getTime()>=cutoff});
     if(!arr.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
