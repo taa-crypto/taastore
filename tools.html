@@ -39,7 +39,7 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 <button onclick="closePremiumCheckout()" class="w-full mt-2 px-5 py-3 rounded-xl border border-slate-800 text-slate-400 text-xs font-black">Batal</button>
 <div id="premiumUploadMsg" class="text-xs text-slate-500 mt-3"></div>
 </div></div></div>
-<div id="premiumStatus" class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">Memuat status Premium...</div>
+<div id="premiumStatus" class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">Login untuk melihat status Premium.</div>
 <div id="premiumAdmin" class="hidden mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
 <div class="flex items-center justify-between gap-3"><div><div class="text-[10px] tracking-widest text-cyan-300 font-black uppercase">Admin Verification</div><h3 class="font-black mt-1">Premium Orders</h3></div><button onclick="loadAdminPremiumOrders()" class="text-xs px-3 py-2 rounded-xl border border-slate-700">Refresh</button></div>
 <div id="adminPremiumMsg" class="text-xs text-slate-500 mt-3"></div><div id="adminPremiumOrders" class="grid gap-3 mt-3"></div>
@@ -63,7 +63,7 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 <button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">🧾 Pesanan Saya</h3><p id="accountOrdersMsg" class="text-xs text-slate-500 mt-1">Memuat pesanan...</p><div id="accountOrdersList" class="grid gap-2 mt-4"></div>
 </div>
 <div id="accountPremiumView" class="hidden">
-<button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">♛ Premium TAASTORE</h3><div id="accountPremiumBox" class="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><b id="accountPremiumTitle">Premium Tools</b><p id="accountPremiumText" class="text-xs text-slate-400 mt-2">Memuat status Premium...</p></div><button type="button" onclick="openPremiumTools()" class="w-full mt-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-200 py-3 text-xs font-black">Buka Premium Tools</button>
+<button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">♛ Premium TAASTORE</h3><div id="accountPremiumBox" class="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><b id="accountPremiumTitle">Premium Tools</b><p id="accountPremiumText" class="text-xs text-slate-400 mt-2">Login untuk melihat status Premium.</p></div><button type="button" onclick="openPremiumTools()" class="w-full mt-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-200 py-3 text-xs font-black">Buka Premium Tools</button>
 </div>
 <div id="accountAdminView" class="hidden">
 <button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">⚙ Admin Tools</h3><p class="text-xs text-slate-400 mt-2">Akun Admin terdeteksi. Premium Tools aktif tanpa pembayaran.</p><button type="button" onclick="openPremiumTools()" class="w-full mt-4 rounded-xl bg-cyan-400/10 border border-cyan-400/30 text-cyan-200 py-3 text-xs font-black">Buka Tools Premium</button>
@@ -154,7 +154,7 @@ async function initPremium(){
     });
   }
 }
-window.addEventListener('load',initPremium);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initPremium,{once:true});else initPremium();
 
 function showTool(id){document.querySelectorAll('.tool-panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tool-tab').forEach(x=>x.classList.remove('active'));document.getElementById(id)?.classList.add('active');document.querySelector('[data-tool="'+id+'"]')?.classList.add('active');if(history.replaceState)history.replaceState(null,'','#'+id)}
 window.addEventListener('hashchange',()=>{const id=location.hash.replace('#','');if(['vend','scan','render','premium'].includes(id))showTool(id)});window.addEventListener('load',()=>{const id=location.hash.replace('#','');showTool(['vend','scan','render','premium'].includes(id)?id:'vend')});
