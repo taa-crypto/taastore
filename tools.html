@@ -67,7 +67,7 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 <button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">🧾 Pesanan Saya</h3><p id="accountOrdersMsg" class="text-xs text-slate-500 mt-1">Memuat pesanan...</p><div id="accountOrdersList" class="grid gap-2 mt-4"></div>
 </div>
 <div id="accountPremiumView" class="hidden">
-<button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">♛ Premium TAASTORE</h3><div id="accountPremiumBox" class="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><b id="accountPremiumTitle">Premium Tools</b><p id="accountPremiumText" class="text-xs text-slate-400 mt-2">Memuat status Premium...</p></div><button type="button" onclick="openPremiumTools()" class="w-full mt-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-200 py-3 text-xs font-black">Buka Premium Tools</button>
+<button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">♛ Premium TAASTORE</h3><div id="accountPremiumBox" class="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><b id="accountPremiumTitle">Premium Tools</b><p id="accountPremiumText" class="text-xs text-slate-400 mt-2">Memuat status Premium...</p><div id="accountPremiumDates" class="text-xs text-slate-500 mt-3"></div></div><button type="button" onclick="openPremiumTools()" class="w-full mt-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-200 py-3 text-xs font-black">♛ Perpanjang / Beli Premium</button><button type="button" onclick="showAccountSection('orders')" class="w-full mt-2 rounded-xl border border-slate-700 text-slate-300 py-3 text-xs font-black">🧾 Lihat Pesanan Premium</button>
 </div>
 <div id="accountAdminView" class="hidden">
 <button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">⚙ Admin Tools</h3><p class="text-xs text-slate-400 mt-2">Akun Admin terdeteksi. Premium Tools aktif tanpa pembayaran.</p><button type="button" onclick="openPremiumTools()" class="w-full mt-4 rounded-xl bg-cyan-400/10 border border-cyan-400/30 text-cyan-200 py-3 text-xs font-black">Buka Tools Premium</button>
@@ -86,9 +86,64 @@ async function openAuth(){const m=$('authModal');if(!m)return;m.classList.add('o
 function closeAuth(){const m=$('authModal');if(m)m.classList.remove('open')}
 function toggleAuthMode(){signup=!signup;const t=$('authTitle'),s=$('authSwitch');if(t)t.textContent=signup?'Daftar TAASTORE':'Login TAASTORE';if(s)s.textContent=signup?'Sudah punya akun? Login':'Belum punya akun? Daftar'}
 function renderAccount(){if(!currentUser)return;const meta=currentUser.user_metadata||{};const name=(meta.full_name||meta.name||currentUser.email||'Akun').trim();const email=(currentUser.email||'').trim().toLowerCase();const role=currentIsAdmin?'Admin':'Member';const premium=currentIsAdmin?'Premium aktif':'Belum aktif';const av=$('accountAvatar'),nm=$('accountName'),em=$('accountEmail'),rl=$('accountRole'),pr=$('accountPremium'),ad=$('adminAccountBtn');if(av)av.textContent=name.charAt(0).toUpperCase()||'A';if(nm)nm.textContent=name;if(em)em.textContent=email||'-';if(rl)rl.textContent=role;if(pr)pr.textContent=premium;if(ad)ad.classList.toggle('hidden',!currentIsAdmin);const pt=$('accountPremiumText');if(pt)pt.textContent=currentIsAdmin?'Premium aktif gratis sebagai Admin.':'Premium belum aktif. Pilih paket di Premium Tools.';showAccountSection('home')}
-function showAccountSection(section){['accountHomeView','accountOrdersView','accountPremiumView','accountAdminView'].forEach(id=>$(id)?.classList.add('hidden'));if(section==='orders'){$('accountOrdersView')?.classList.remove('hidden');loadAccountOrders();}else if(section==='premium'){$('accountPremiumView')?.classList.remove('hidden');}else if(section==='admin'){$('accountAdminView')?.classList.remove('hidden');}else $('accountHomeView')?.classList.remove('hidden')}
-async function loadAccountOrders(){const msg=$('accountOrdersMsg'),list=$('accountOrdersList');if(!msg||!list)return;msg.textContent='Memuat pesanan...';list.innerHTML='';if(!currentUser){msg.textContent='Login diperlukan.';return}try{const email=encodeURIComponent((currentUser.email||'').trim());let rows=[];try{rows=await req('/rest/v1/orders?select=order_id,product,qty,total,status,created_at,buyer_name&buyer_email=eq.'+email+'&order=created_at.desc&limit=30')}catch{}if(!rows.length){const ids=JSON.parse(localStorage.getItem('taastore_buyer_order_ids')||'[]');if(ids.length){rows=await Promise.all(ids.slice(0,30).map(async id=>{try{const r=await req('/rest/v1/orders?select=order_id,product,qty,total,status,created_at,buyer_name&order_id=eq.'+encodeURIComponent(id)+'&limit=1');return r?.[0]||null}catch{return null}}));rows=rows.filter(Boolean)}}if(!rows.length){msg.textContent='Belum ada pesanan untuk akun ini.';return}msg.textContent=rows.length+' pesanan';list.innerHTML=rows.map(o=>'<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">'+escAccount(o.product||'Pesanan')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(o.status||'WAITING_PAYMENT')+'</span></div><div class="text-xs text-slate-400 mt-2">Order: '+escAccount(o.order_id||'-')+' · Qty: '+escAccount(o.qty??'-')+'</div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>').join('')}catch(e){msg.textContent='Pesanan belum dapat dimuat. Coba lagi.'}}
+function showAccountSection(section){['accountHomeView','accountOrdersView','accountPremiumView','accountAdminView'].forEach(id=>$(id)?.classList.add('hidden'));if(section==='orders'){$('accountOrdersView')?.classList.remove('hidden');loadAccountOrders();}else if(section==='premium'){$('accountPremiumView')?.classList.remove('hidden');loadAccountPremiumStatus();}else if(section==='admin'){$('accountAdminView')?.classList.remove('hidden');}else $('accountHomeView')?.classList.remove('hidden')}
+async function loadAccountOrders(){
+  const msg=$('accountOrdersMsg'),list=$('accountOrdersList');
+  if(!msg||!list)return;
+  msg.textContent='Memuat pesanan...'; list.innerHTML='';
+  if(!currentUser){msg.textContent='Login diperlukan.';return}
+  try{
+    const email=encodeURIComponent((currentUser.email||'').trim());
+    let marketplaceRows=[];
+    try{marketplaceRows=await req('/rest/v1/orders?select=order_id,product,qty,total,status,created_at,buyer_name&buyer_email=eq.'+email+'&order=created_at.desc&limit=30')}catch{}
+
+    let premiumRows=[];
+    try{
+      premiumRows=await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,payment_proof_path,payment_proof,status,created_at,verified_at&user_id=eq.'+encodeURIComponent(currentUser.id)+'&order=created_at.desc&limit=30');
+    }catch{}
+
+    // Premium ditampilkan sebagai bagian dari Pesanan Saya, tanpa mengubah data/alur Marketplace.
+    const premiumCards=(Array.isArray(premiumRows)?premiumRows:[]).map(o=>{
+      const id=String(o.order_id||'');
+      const short=id.slice(-12);
+      const days=Number(o.duration||o.duration_days||0);
+      const status=String(o.status||'PENDING_VERIFICATION');
+      const statusText=status==='APPROVED'?'AKTIF / DISETUJUI':status==='REJECTED'?'DITOLAK':status==='PENDING_VERIFICATION'?'MENUNGGU VERIFIKASI':status;
+      return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">'
+        +'<div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(statusText)+'</span></div>'
+        +'<div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div>'
+        +'<div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div>'
+        +'</div>';
+    }).join('');
+
+    const marketplaceCards=(Array.isArray(marketplaceRows)?marketplaceRows:[]).map(o=>'<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">'+escAccount(o.product||'Pesanan')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(o.status||'WAITING_PAYMENT')+'</span></div><div class="text-xs text-slate-400 mt-2">Order: '+escAccount(o.order_id||'-')+' · Qty: '+escAccount(o.qty??'-')+'</div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>').join('');
+
+    const total=(Array.isArray(premiumRows)?premiumRows.length:0)+(Array.isArray(marketplaceRows)?marketplaceRows.length:0);
+    if(!total){msg.textContent='Belum ada pesanan untuk akun ini.';return}
+    msg.textContent=total+' pesanan';
+    list.innerHTML=(premiumCards?'<div><div class="text-[10px] tracking-widest text-amber-300 font-black uppercase mb-2">♛ Premium</div><div class="grid gap-2">'+premiumCards+'</div></div>':'')+(marketplaceCards?'<div class="mt-5"><div class="text-[10px] tracking-widest text-slate-500 font-black uppercase mb-2">Marketplace</div><div class="grid gap-2">'+marketplaceCards+'</div></div>':'');
+  }catch(e){msg.textContent='Pesanan belum dapat dimuat. Coba lagi.'}
+}
 function escAccount(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function loadAccountPremiumStatus(){
+  const text=$('accountPremiumText'),dates=$('accountPremiumDates');
+  if(!currentUser){if(text)text.textContent='Login diperlukan.';return}
+  if(currentIsAdmin){if(text)text.textContent='Premium aktif gratis sebagai Admin.';if(dates)dates.textContent='';return}
+  if(text)text.textContent='Memuat status Premium...'; if(dates)dates.textContent='';
+  try{
+    const rows=await req('/rest/v1/rpc/get_my_premium_status',{method:'POST',body:'{}'});
+    const st=Array.isArray(rows)?rows[0]:rows;
+    const expiry=st?.premium_expiry?new Date(st.premium_expiry):null;
+    const start=st?.premium_start?new Date(st.premium_start):null;
+    if(st?.is_active&&expiry&&Number.isFinite(expiry.getTime())){
+      if(text)text.textContent='Premium aktif sampai '+expiry.toLocaleString('id-ID')+'. Kamu bisa membeli paket lagi untuk memperpanjang masa aktif.';
+      if(dates)dates.textContent=(start&&Number.isFinite(start.getTime())?'Mulai: '+start.toLocaleDateString('id-ID')+' · ':'')+'Berakhir: '+expiry.toLocaleDateString('id-ID');
+    }else{
+      if(text)text.textContent='Premium belum aktif. Pilih paket untuk mulai berlangganan.';
+      if(dates)dates.textContent='';
+    }
+  }catch(e){if(text)text.textContent='Status Premium belum dapat dimuat. Kamu tetap bisa memilih paket untuk membeli atau memperpanjang.'}
+}
 function openPremiumTools(){closeAuth();window.location.href='tools.html#premium'}
 function base64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function randomVerifier(n=64){const a=new Uint8Array(n);crypto.getRandomValues(a);return base64Url(a)}
