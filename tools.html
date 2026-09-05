@@ -138,15 +138,21 @@ async function signedProof(path){const r=await fetch(SB+'/storage/v1/object/sign
 async function loadAdminPremiumOrders(){await refreshAuth();if(!currentIsAdmin){$('premiumAdmin').classList.add('hidden');return}$('premiumAdmin').classList.remove('hidden');$('adminPremiumMsg').textContent='Memuat order...';const box=$('adminPremiumOrders');box.innerHTML='';try{const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});if(!rows?.length){$('adminPremiumMsg').textContent='Belum ada order Premium.';return}$('adminPremiumMsg').textContent=rows.length+' order';for(const o of rows){let proof='';if(o.payment_proof){try{proof=await signedProof(o.payment_proof)}catch{}}const card=document.createElement('article');card.className='rounded-2xl border border-slate-800 bg-slate-950/60 p-4';card.innerHTML=`<div class="flex justify-between gap-3"><div><b>${esc(o.package||'Premium')}</b><div class="text-xs text-slate-500 mt-1">${esc(o.order_id)}</div></div><span class="text-[10px] font-black ${o.status==='APPROVED'?'text-emerald-300':o.status==='REJECTED'?'text-rose-300':'text-amber-300'}">${esc(o.status)}</span></div><div class="text-xs text-slate-400 mt-2">${money(o.amount)} · ${o.duration} hari · ${new Date(o.created_at).toLocaleString('id-ID')}</div>${proof?`<a href="${esc(proof)}" target="_blank" rel="noopener" class="inline-block text-xs text-cyan-300 mt-3">Lihat bukti pembayaran</a>`:'<div class="text-xs text-slate-600 mt-3">Bukti belum terpasang.</div>'}${o.status==='PENDING_VERIFICATION'?`<div class="grid grid-cols-2 gap-2 mt-3"><button onclick="verifyPremiumOrder('${o.order_id}',true)" class="rounded-xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-300 py-2 text-xs font-black">Approve</button><button onclick="verifyPremiumOrder('${o.order_id}',false)" class="rounded-xl bg-rose-400/10 border border-rose-400/20 text-rose-300 py-2 text-xs font-black">Reject</button></div>`:''}`;box.appendChild(card)}}catch(e){$('adminPremiumMsg').textContent='Order admin belum dapat dimuat. Jalankan SQL TAASTORE dan cek RLS.'}}
 async function verifyPremiumOrder(id,approve){if(!currentIsAdmin)return;if(!confirm(approve?'Approve order ini dan aktifkan Premium?':'Reject order ini?'))return;try{await req('/rest/v1/rpc/admin_verify_premium_order',{method:'POST',body:JSON.stringify({p_order_id:id,p_approve:approve})});await loadAdminPremiumOrders();await loadPremiumStatus()}catch(e){$('adminPremiumMsg').textContent=e.message||'Verifikasi gagal.'}}
 async function initPremium(){
-  // Jangan blokir UI Premium karena jaringan/Supabase. Paket langsung tampil.
+  // UI Premium harus instan. Jangan menunggu Supabase/Auth untuk menampilkan halaman.
   premiumPackages=Object.values(PREMIUM_FALLBACK);
   renderPremiumPackages();
-  $('premiumStatus').textContent='Memeriksa status Premium...';
-  const authOk=await refreshAuth();
-  await loadPremiumPackages();
-  if(authOk) await loadPremiumStatus();
-  else $('premiumStatus').textContent='Login untuk melihat status Premium.';
-  if(currentIsAdmin) loadAdminPremiumOrders();
+  $('premiumStatus').textContent=token()?'Mengecek status Premium...':'Login untuk melihat status Premium.';
+
+  // Semua sinkronisasi berjalan di background; kegagalan jaringan tidak membuat UI macet.
+  loadPremiumPackages();
+  if(token()){
+    refreshAuth().then(authOk=>{
+      if(authOk) return loadPremiumStatus();
+      $('premiumStatus').textContent='Status Premium belum tersedia. Silakan login kembali.';
+    }).then(()=>{if(currentIsAdmin) loadAdminPremiumOrders()}).catch(()=>{
+      $('premiumStatus').textContent=currentIsAdmin?'Premium aktif sebagai Admin.':'Status Premium belum tersedia. Paket tetap bisa dipilih.';
+    });
+  }
 }
 window.addEventListener('load',initPremium);
 
