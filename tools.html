@@ -158,7 +158,7 @@ async function submitPremiumProof(){
     const path=`${currentUser.id}/${order.order_id}.${ext}`;
     const upload=await fetch(SB+'/storage/v1/object/premium-proofs/'+encodeURIComponent(path).replace(/%2F/g,'/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+token(),'x-upsert':'false','Content-Type':file.type},body:file});
     if(!upload.ok){let d={};try{d=await upload.json()}catch{}throw Error(d?.message||'Upload bukti gagal.')}
-    await req('/rest/v1/rpc/attach_premium_payment_proof_v2',{method:'POST',body:JSON.stringify({p_order_id:order.order_id,p_path:path})});
+    await req('/rest/v1/rpc/attach_premium_payment_proof_v3',{method:'POST',body:JSON.stringify({p_order_id:order.order_id,p_path:path})});
     const verifyText=`Halo Admin TAASTORE.GT\n\nSaya sudah melakukan pembayaran Premium.\nOrder ID: #${order.order_id}\n\nMohon bantu verifikasi ya. Terima kasih 🙏`;
     const verifyBtn=$('premiumFastVerify');
     if(verifyBtn){verifyBtn.href=`https://wa.me/6282123602358?text=${encodeURIComponent(verifyText)}`;verifyBtn.classList.remove('hidden');}
