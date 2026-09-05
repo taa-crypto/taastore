@@ -218,11 +218,19 @@ function closePremiumCheckout(){$('premiumCheckout')?.classList.add('hidden');se
 async function choosePlan(plan){
   selectedPremiumPackage=premiumPackages.find(p=>p.package_id===plan)||PREMIUM_FALLBACK[plan];
   if(!selectedPremiumPackage){$('premiumMsg').textContent='Paket tidak ditemukan.';return}
-  await refreshAuth();
-  if(!currentUser){
+  // Respons UI harus langsung saat user belum login; jangan menunggu request Auth.
+  if(!token()){
     pendingPremiumCheckout=true;
     sessionStorage.setItem('taastore_pending_premium_package',selectedPremiumPackage.package_id);
     $('premiumMsg').textContent='Paket bisa dilihat tanpa login. Login diperlukan untuk melanjutkan checkout.';
+    openAuth();
+    return;
+  }
+  const authOk=await refreshAuth();
+  if(!authOk||!currentUser){
+    pendingPremiumCheckout=true;
+    sessionStorage.setItem('taastore_pending_premium_package',selectedPremiumPackage.package_id);
+    $('premiumMsg').textContent='Sesi login perlu diperbarui. Silakan login kembali.';
     openAuth();
     return;
   }
@@ -234,8 +242,11 @@ async function choosePlan(plan){
   $('premiumProof').value='';
 }
 async function submitPremiumProof(){
-  await refreshAuth();
-  if(!currentUser){$('premiumUploadMsg').textContent='Login diperlukan untuk checkout.';openAuth();return}
+  if(!currentUser){
+    if(!token()){$('premiumUploadMsg').textContent='Login diperlukan untuk checkout.';openAuth();return}
+    const authOk=await refreshAuth();
+    if(!authOk||!currentUser){$('premiumUploadMsg').textContent='Sesi login perlu diperbarui. Silakan login kembali.';openAuth();return}
+  }
   if(currentIsAdmin){$('premiumUploadMsg').textContent='Admin tidak perlu melakukan pembayaran.';return}
   if(!selectedPremiumPackage){$('premiumUploadMsg').textContent='Pilih paket terlebih dahulu.';return}
   const file=$('premiumProof').files?.[0];
@@ -252,7 +263,12 @@ async function submitPremiumProof(){
     const upload=await fetch(SB+'/storage/v1/object/premium-proofs/'+encodeURIComponent(path).replace(/%2F/g,'/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+token(),'x-upsert':'false','Content-Type':file.type},body:file});
     if(!upload.ok){let d={};try{d=await upload.json()}catch{}throw Error(d?.message||'Upload bukti gagal.')}
     await req('/rest/v1/rpc/attach_premium_payment_proof_v4',{method:'POST',body:JSON.stringify({p_order_id:order.order_id,p_path:path})});
-    const verifyText=`Halo Admin TAASTORE.GT\n\nSaya sudah melakukan pembayaran Premium.\nOrder ID: #${order.order_id}\n\nMohon bantu verifikasi ya. Terima kasih 🙏`;
+    const verifyText=`Halo Admin TAASTORE.GT
+
+Saya sudah melakukan pembayaran Premium.
+Order ID: #${order.order_id}
+
+Mohon bantu verifikasi ya. Terima kasih 🙏`;
     const verifyBtn=$('premiumFastVerify');
     if(verifyBtn){verifyBtn.href=`https://wa.me/6282123602358?text=${encodeURIComponent(verifyText)}`;verifyBtn.classList.remove('hidden');}
     $('premiumUploadMsg').textContent=`Order ${order.order_id} berhasil dikirim dan menunggu verifikasi admin.`;
@@ -261,6 +277,7 @@ async function submitPremiumProof(){
   }catch(e){$('premiumUploadMsg').textContent=e.message||'Pengiriman bukti gagal.'}
   finally{$('premiumSubmit').disabled=false}
 }
+
 loadPremiumPackages();refreshAuth();
 
 function showTool(id){document.querySelectorAll('.tool-panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tool-tab').forEach(x=>x.classList.remove('active'));document.getElementById(id)?.classList.add('active');document.querySelector('[data-tool="'+id+'"]')?.classList.add('active');if(history.replaceState)history.replaceState(null,'','#'+id)}
