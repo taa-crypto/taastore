@@ -107,12 +107,12 @@ function readSupabaseStoredSession(){
 function decodeJwtPayload(t){
   try{const part=t.split('.')[1];if(!part)return null;const b=part.replace(/-/g,'+').replace(/_/g,'/');const json=decodeURIComponent(atob(b).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));return JSON.parse(json)}catch{return null}
 }
-const token=()=>localStorage.getItem('taastore_access_token')||readSupabaseStoredSession()||'';
+const token=()=>readSupabaseStoredSession()||localStorage.getItem('taastore_access_token')||'';
 const headers=()=>({apikey:KEY,Authorization:`Bearer ${token()||KEY}`,'Content-Type':'application/json'});
 async function req(path,opt={}){const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),5000);try{const r=await fetch(SB+path,{...opt,credentials:'include',signal:controller.signal,headers:{...headers(),...(opt.headers||{})}});let d=null;try{d=await r.json()}catch{}if(!r.ok)throw Error(d?.msg||d?.message||d?.error_description||'Request gagal');return d}finally{clearTimeout(timeout)}}
 function toggleMenu(){const m=$('menu'),b=$('hambBtn');if(!m)return;const open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false')}
 function closeMenu(){const m=$('menu'),b=$('hambBtn');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false')}
-async function openAuth(){const m=$('authModal');if(!m)return;m.classList.add('open');const msg=$('authMsg');if(msg)msg.textContent='Memuat akun...';await refreshAuth();const logged=!!currentUser;const title=$('authTitle'),sub=$('authSubtitle'),login=$('loginView'),account=$('accountView');if(title)title.textContent=logged?'Akun TAASTORE':signup?'Daftar TAASTORE':'Login TAASTORE';if(sub)sub.textContent=logged?'Kelola akun, Premium, dan pesanan kamu.':'Login untuk akun, riwayat, dan Premium.';if(login)login.classList.toggle('hidden',logged);if(account)account.classList.toggle('hidden',!logged);if(msg)msg.textContent='';if(logged)renderAccount()}
+async function openAuth(){const m=$('authModal');if(!m)return;m.classList.add('open');const msg=$('authMsg');if(msg)msg.textContent='';const title=$('authTitle'),sub=$('authSubtitle'),login=$('loginView'),account=$('accountView');const paint=()=>{const logged=!!currentUser;if(title)title.textContent=logged?'Akun TAASTORE':signup?'Daftar TAASTORE':'Login TAASTORE';if(sub)sub.textContent=logged?'Kelola akun, Premium, dan pesanan kamu.':'Login untuk akun, riwayat, dan Premium.';if(login)login.classList.toggle('hidden',logged);if(account)account.classList.toggle('hidden',!logged);if(logged)renderAccount()};paint();refreshAuth().then(paint)}
 function closeAuth(){const m=$('authModal');if(m)m.classList.remove('open')}
 function toggleAuthMode(){signup=!signup;const t=$('authTitle'),s=$('authSwitch');if(t)t.textContent=signup?'Daftar TAASTORE':'Login TAASTORE';if(s)s.textContent=signup?'Sudah punya akun? Login':'Belum punya akun? Daftar'}
 function renderAccount(){if(!currentUser)return;const meta=currentUser.user_metadata||{};const name=(meta.full_name||meta.name||currentUser.email||'Akun').trim();const email=(currentUser.email||'').trim().toLowerCase();const role=currentIsAdmin?'Admin':'Member';const premium=currentIsAdmin?'Premium aktif':'Belum aktif';const av=$('accountAvatar'),nm=$('accountName'),em=$('accountEmail'),rl=$('accountRole'),pr=$('accountPremium'),ad=$('adminAccountBtn');if(av)av.textContent=name.charAt(0).toUpperCase()||'A';if(nm)nm.textContent=name;if(em)em.textContent=email||'-';if(rl)rl.textContent=role;if(pr)pr.textContent=premium;if(ad)ad.classList.toggle('hidden',!currentIsAdmin);const pt=$('accountPremiumText');if(pt)pt.textContent=currentIsAdmin?'Premium aktif gratis sebagai Admin.':'Premium belum aktif. Pilih paket di Premium Tools.';showAccountSection('home')}
@@ -129,56 +129,17 @@ function absorbAuthHash(){const raw=location.hash.startsWith('#')?location.hash.
 async function exchangeAuthCode(){const code=new URLSearchParams(location.search).get('code');if(!code)return false;const verifier=localStorage.getItem('taastore_pkce_verifier')||'';if(!verifier)throw Error('Kode login ditemukan, tetapi verifier tidak ada. Silakan login Google lagi.');const r=await fetch(SB+'/auth/v1/token?grant_type=pkce',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({auth_code:code,code_verifier:verifier})});let d=null;try{d=await r.json()}catch{}if(!r.ok)throw Error(d?.msg||d?.message||d?.error_description||'Kode login Google tidak dapat ditukar');if(!d.access_token)throw Error('Token login Google tidak diterima');localStorage.setItem('taastore_access_token',d.access_token);if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);localStorage.removeItem('taastore_pkce_verifier');history.replaceState(null,document.title,location.pathname);return true}
 async function refreshSession(){const rt=localStorage.getItem('taastore_refresh_token')||'';if(!rt)return false;try{const r=await fetch(SB+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:rt})});let x=null;try{x=await r.json()}catch{}if(!r.ok||!x?.access_token)throw Error();localStorage.setItem('taastore_access_token',x.access_token);if(x.refresh_token)localStorage.setItem('taastore_refresh_token',x.refresh_token);return true}catch{return false}}
 async function refreshAuth(){
-  const previousUser=currentUser;
-  try{
-    let access=token();
-    let u=null;
-    if(access){
-      try{u=await req('/auth/v1/user')}catch{}
-      if(!u){
-        const claims=decodeJwtPayload(access);
-        if(claims?.sub) u={id:claims.sub,email:claims.email||'',user_metadata:{}};
-      }
-    }
-    if(!u){
-      const stored=scanStoredSession();
-      if(stored?.access_token){
-        localStorage.setItem('taastore_access_token',stored.access_token);
-        if(stored.refresh_token)localStorage.setItem('taastore_refresh_token',stored.refresh_token);
-        access=stored.access_token;
-        try{u=await req('/auth/v1/user')}catch{}
-        if(!u){const claims=decodeJwtPayload(access);if(claims?.sub)u={id:claims.sub,email:claims.email||'',user_metadata:{}}}
-      }
-    }
-    if(!u && await refreshSession()){
-      access=token();
-      try{u=await req('/auth/v1/user')}catch{}
-      if(!u){const claims=decodeJwtPayload(access);if(claims?.sub)u={id:claims.sub,email:claims.email||'',user_metadata:{}}}
-    }
-    const candidate=u?.user||u;
-    if(!candidate?.id) throw Error('Session login tidak ditemukan');
-    currentUser=candidate;
-    currentIsAdmin=false;
-    const email=(currentUser.email||'').trim().toLowerCase();
-    if(email){
-      try{
-        const qs=new URLSearchParams({select:'is_admin,premium_override',email:'eq.'+email,limit:'1'});
-        const r=await req('/rest/v1/taastore_admin_access?'+qs.toString());
-        currentIsAdmin=!!r?.[0]?.is_admin;
-      }catch{}
-    }
-    const name=(currentUser.user_metadata?.full_name||currentUser.user_metadata?.name||currentUser.email||'Akun').split('@')[0];
-    const b=$('accountBtn');if(b){b.textContent=currentIsAdmin?name+' · Admin':name;b.title='Buka Akun Saya'}
-    const ml=$('menuAccountLabel');if(ml)ml.textContent=currentIsAdmin?'Akun Saya · Admin':'Akun Saya';
-    return true;
-  }catch{
-    if(previousUser){currentUser=previousUser;return true}
-    currentIsAdmin=false;
-    const b=$('accountBtn');if(b)b.textContent='Login';
-    const ml=$('menuAccountLabel');if(ml)ml.textContent='Akun Saya';
-    return false;
-  }
+ try{
+  let access=token(); let candidate=null;
+  if(access){const claims=decodeJwtPayload(access);if(claims?.sub)candidate={id:claims.sub,email:claims.email||'',user_metadata:claims.user_metadata||{}};try{const u=await req('/auth/v1/user');candidate=u?.user||u||candidate}catch{}}
+  if(!candidate?.id && await refreshSession()){access=token();const claims=decodeJwtPayload(access);if(claims?.sub)candidate={id:claims.sub,email:claims.email||'',user_metadata:claims.user_metadata||{}};try{const u=await req('/auth/v1/user');candidate=u?.user||u||candidate}catch{}}
+  if(!candidate?.id){currentIsAdmin=false;const b=$('accountBtn');if(b)b.textContent='Login';const ml=$('menuAccountLabel');if(ml)ml.textContent='Akun Saya';return false}
+  currentUser=candidate;currentIsAdmin=false;const email=(currentUser.email||'').trim().toLowerCase();
+  if(email){try{const qs=new URLSearchParams({select:'is_admin,premium_override',email:'eq.'+email,limit:'1'});const r=await req('/rest/v1/taastore_admin_access?'+qs.toString());currentIsAdmin=!!r?.[0]?.is_admin}catch{}}
+  const name=(currentUser.user_metadata?.full_name||currentUser.user_metadata?.name||currentUser.email||'Akun').split('@')[0];const b=$('accountBtn');if(b){b.textContent=currentIsAdmin?name+' · Admin':name;b.title='Buka Akun Saya'}const ml=$('menuAccountLabel');if(ml)ml.textContent=currentIsAdmin?'Akun Saya · Admin':'Akun Saya';return true;
+ }catch{return !!currentUser}
 }
+function logoutUser(){const rx=/auth-token|supabase.auth.token|taastore_access_token|taastore_refresh_token|taastore_pkce_verifier/i;try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i)||'';if(rx.test(k))localStorage.removeItem(k)}}catch{}try{for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i)||'';if(rx.test(k))sessionStorage.removeItem(k)}}catch{}currentUser=null;currentIsAdmin=false;const b=$('accountBtn');if(b)b.textContent='Login';const ml=$('menuAccountLabel');if(ml)ml.textContent='Akun Saya';if($('premiumStatus'))$('premiumStatus').textContent='Login untuk melihat status Premium.';closeAuth()}
 async function loadPremiumStatus(){if(!currentUser){$('premiumStatus').textContent='Login untuk melihat status Premium.';return}try{const r=await req('/rest/v1/rpc/get_my_premium_status',{method:'POST',body:'{}'});const x=r?.[0];currentPremiumActive=!!x?.is_active;if(currentIsAdmin)currentPremiumActive=true;if(currentPremiumActive){const expiry=x?.premium_expiry;if(currentIsAdmin && !expiry){$('premiumStatus').innerHTML='<b class="text-amber-300">Premium aktif</b><div class="mt-1">Aktif gratis sebagai Admin.</div>'}else if(expiry){$('premiumStatus').innerHTML=`<b class="text-amber-300">Premium aktif</b><div class="mt-1">Berlaku sampai: ${new Date(expiry).toLocaleString('id-ID')}</div>`}else $('premiumStatus').textContent='Premium aktif.'}else $('premiumStatus').textContent='Premium belum aktif. Pilih paket untuk membuat order.'}catch{$('premiumStatus').textContent=currentIsAdmin?'Premium aktif sebagai Admin.':'Status Premium belum tersedia. Paket tetap bisa dipilih.'}}
 async function choosePlan(plan){await refreshAuth();if(!currentUser){$('premiumMsg').textContent='Login dulu untuk memilih paket Premium.';openAuth();return}if(currentIsAdmin){$('premiumMsg').textContent='Akun ADMIN · Premium Tools aktif tanpa pembayaran.';await loadPremiumStatus();return}selectedPremiumPackage=premiumPackages.find(p=>p.package_id===plan)||PREMIUM_FALLBACK[plan];if(!selectedPremiumPackage){$('premiumMsg').textContent='Paket tidak ditemukan.';return}if(!selectedPremiumPackage.amount){$('premiumMsg').textContent='Harga paket belum tersedia dari Supabase.';return}$('premiumCheckout').classList.remove('hidden');$('checkoutPackage').textContent=selectedPremiumPackage.label;$('checkoutAmount').textContent=money(selectedPremiumPackage.amount);$('premiumUploadMsg').textContent='';$('premiumProof').value='';$('premiumMsg').textContent='QRIS ditampilkan. Setelah pembayaran, upload bukti di bawah.'}
 function closePremiumCheckout(){$('premiumCheckout')?.classList.add('hidden');selectedPremiumPackage=null}
@@ -190,13 +151,13 @@ async function initPremium(){
   // UI Premium harus instan. Jangan menunggu Supabase/Auth untuk menampilkan halaman.
   premiumPackages=Object.values(PREMIUM_FALLBACK);
   renderPremiumPackages();
-  $('premiumStatus').textContent='Mengecek akun...';
+  $('premiumStatus').textContent=currentUser?'Mengecek status Premium...':'Status Premium siap dicek.';
 
   // Sinkronisasi background. Refresh token dipakai bila access token kedaluwarsa.
   loadPremiumPackages();
   refreshAuth().then(authOk=>{
     if(authOk) return loadPremiumStatus();
-    $('premiumStatus').textContent='Sesi akun belum terbaca. Buka Akun Saya sekali untuk menyinkronkan sesi.';
+    $('premiumStatus').textContent='Status Premium belum dapat disinkronkan. Akun tetap dapat digunakan.';
   }).then(()=>{if(currentIsAdmin) return loadAdminPremiumOrders()}).catch(()=>{
     $('premiumStatus').textContent=currentIsAdmin?'Premium aktif sebagai Admin.':'Status Premium belum tersedia. Paket tetap bisa dipilih.';
   });
