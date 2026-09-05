@@ -59,7 +59,8 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 <div id="accountHomeView">
 <div class="flex items-center gap-4 p-4 rounded-2xl bg-slate-950/70 border border-slate-800"><div id="accountAvatar" class="w-12 h-12 rounded-2xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center text-cyan-300 font-black text-lg">A</div><div class="min-w-0"><div id="accountName" class="font-black truncate">Akun</div><div id="accountEmail" class="text-xs text-slate-500 truncate">-</div></div></div>
 <div class="grid gap-2 mt-4"><div class="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800"><span class="text-xs text-slate-400">Status akun</span><b id="accountRole" class="text-xs text-cyan-300">Member</b></div><div class="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800"><span class="text-xs text-slate-400">Premium Tools</span><b id="accountPremium" class="text-xs text-slate-300">Belum aktif</b></div></div>
-<div class="grid grid-cols-2 gap-2 mt-4"><button type="button" onclick="showAccountSection('orders')" class="rounded-xl border border-slate-700 py-3 text-xs font-black hover:bg-white/5">🧾 Pesanan</button><button type="button" onclick="showAccountSection('premium')" class="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 py-3 text-xs font-black">♛ Premium</button></div>
+<div id="accountMemberActions" class="grid grid-cols-2 gap-2 mt-4"><button type="button" onclick="showAccountSection('orders')" class="rounded-xl border border-slate-700 py-3 text-xs font-black hover:bg-white/5">🧾 Pesanan Saya</button><button type="button" onclick="showAccountSection('premium')" class="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 py-3 text-xs font-black">♛ Premium</button></div>
+<div id="accountAdminActions" class="hidden grid grid-cols-1 gap-2 mt-4"><button type="button" onclick="showAccountSection('adminHistory')" class="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 py-3 text-xs font-black">♛ Riwayat Premium Admin</button></div>
 <button id="adminAccountBtn" type="button" onclick="showAccountSection('admin')" class="hidden w-full mt-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-200 py-3 text-xs font-black">⚙ Admin Tools</button>
 <button id="logoutBtn" type="button" onclick="logoutUser()" class="w-full mt-3 rounded-xl border border-rose-400/20 bg-rose-400/5 text-rose-300 py-3 text-xs font-black">Logout</button>
 </div>
@@ -71,6 +72,9 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 </div>
 <div id="accountAdminView" class="hidden">
 <button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><h3 class="font-black text-lg">⚙ Admin Tools</h3><p class="text-xs text-slate-400 mt-2">Akun Admin terdeteksi. Premium Tools aktif tanpa pembayaran.</p><button type="button" onclick="openPremiumTools()" class="w-full mt-4 rounded-xl bg-cyan-400/10 border border-cyan-400/30 text-cyan-200 py-3 text-xs font-black">Buka Tools Premium</button>
+</div>
+<div id="accountAdminHistoryView" class="hidden">
+<button type="button" onclick="showAccountSection('home')" class="text-xs text-cyan-300 mb-4">← Kembali ke Akun Saya</button><div class="flex items-center justify-between gap-3"><div><h3 class="font-black text-lg">♛ Riwayat Premium</h3><p id="adminPremiumHistoryMsg" class="text-xs text-slate-500 mt-1">Memuat riwayat...</p></div><button type="button" onclick="loadAdminPremiumHistory()" class="text-[10px] px-3 py-2 rounded-xl border border-slate-700 text-slate-300">Refresh</button></div><div class="flex gap-2 mt-4"><select id="adminPremiumHistoryFilter" onchange="adminPremiumHistoryLimit=20;renderAdminPremiumHistory()" class="flex-1 rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs text-slate-300"><option value="recent">Aktif/Pending + 30 Hari Terakhir</option><option value="pending">Menunggu Verifikasi</option><option value="all">Semua Riwayat</option></select></div><div id="adminPremiumHistoryList" class="grid gap-2 mt-4"></div>
 </div>
 </div><p id="authMsg" class="text-xs mt-3"></p></div></div><script>
 const SB='https://deqzgidcjpvrlxhtkruq.supabase.co';
@@ -85,46 +89,52 @@ function closeMenu(){const m=$('menu'),b=$('hambBtn');if(m)m.classList.remove('o
 async function openAuth(){const m=$('authModal');if(!m)return;m.classList.add('open');const msg=$('authMsg');if(msg)msg.textContent='Memuat akun...';await refreshAuth();const logged=!!currentUser;const title=$('authTitle'),sub=$('authSubtitle'),login=$('loginView'),account=$('accountView');if(title)title.textContent=logged?'Akun TAASTORE':signup?'Daftar TAASTORE':'Login TAASTORE';if(sub)sub.textContent=logged?'Kelola akun, Premium, dan pesanan kamu.':'Login untuk akun, riwayat, dan Premium.';if(login)login.classList.toggle('hidden',logged);if(account)account.classList.toggle('hidden',!logged);if(msg)msg.textContent='';if(logged)renderAccount()}
 function closeAuth(){const m=$('authModal');if(m)m.classList.remove('open')}
 function toggleAuthMode(){signup=!signup;const t=$('authTitle'),s=$('authSwitch');if(t)t.textContent=signup?'Daftar TAASTORE':'Login TAASTORE';if(s)s.textContent=signup?'Sudah punya akun? Login':'Belum punya akun? Daftar'}
-function renderAccount(){if(!currentUser)return;const meta=currentUser.user_metadata||{};const name=(meta.full_name||meta.name||currentUser.email||'Akun').trim();const email=(currentUser.email||'').trim().toLowerCase();const role=currentIsAdmin?'Admin':'Member';const premium=currentIsAdmin?'Premium aktif':'Belum aktif';const av=$('accountAvatar'),nm=$('accountName'),em=$('accountEmail'),rl=$('accountRole'),pr=$('accountPremium'),ad=$('adminAccountBtn');if(av)av.textContent=name.charAt(0).toUpperCase()||'A';if(nm)nm.textContent=name;if(em)em.textContent=email||'-';if(rl)rl.textContent=role;if(pr)pr.textContent=premium;if(ad)ad.classList.toggle('hidden',!currentIsAdmin);const pt=$('accountPremiumText');if(pt)pt.textContent=currentIsAdmin?'Premium aktif gratis sebagai Admin.':'Premium belum aktif. Pilih paket di Premium Tools.';showAccountSection('home')}
-function showAccountSection(section){['accountHomeView','accountOrdersView','accountPremiumView','accountAdminView'].forEach(id=>$(id)?.classList.add('hidden'));if(section==='orders'){$('accountOrdersView')?.classList.remove('hidden');loadAccountOrders();}else if(section==='premium'){$('accountPremiumView')?.classList.remove('hidden');loadAccountPremiumStatus();}else if(section==='admin'){$('accountAdminView')?.classList.remove('hidden');}else $('accountHomeView')?.classList.remove('hidden')}
-async function loadAccountOrders(){
-  const msg=$('accountOrdersMsg'),list=$('accountOrdersList');
-  if(!msg||!list)return;
-  msg.textContent='Memuat pesanan...'; list.innerHTML='';
-  if(!currentUser){msg.textContent='Login diperlukan.';return}
-  try{
-    const email=encodeURIComponent((currentUser.email||'').trim());
-    let marketplaceRows=[];
-    try{marketplaceRows=await req('/rest/v1/orders?select=order_id,product,qty,total,status,created_at,buyer_name&buyer_email=eq.'+email+'&order=created_at.desc&limit=30')}catch{}
-
-    let premiumRows=[];
-    try{
-      premiumRows=await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,payment_proof_path,payment_proof,status,created_at,verified_at&user_id=eq.'+encodeURIComponent(currentUser.id)+'&order=created_at.desc&limit=30');
-    }catch{}
-
-    // Premium ditampilkan sebagai bagian dari Pesanan Saya, tanpa mengubah data/alur Marketplace.
-    const premiumCards=(Array.isArray(premiumRows)?premiumRows:[]).map(o=>{
-      const id=String(o.order_id||'');
-      const short=id.slice(-12);
-      const days=Number(o.duration||o.duration_days||0);
-      const status=String(o.status||'PENDING_VERIFICATION');
-      const statusText=status==='APPROVED'?'AKTIF / DISETUJUI':status==='REJECTED'?'DITOLAK':status==='PENDING_VERIFICATION'?'MENUNGGU VERIFIKASI':status;
-      return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">'
-        +'<div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(statusText)+'</span></div>'
-        +'<div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div>'
-        +'<div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div>'
-        +'</div>';
-    }).join('');
-
-    const marketplaceCards=(Array.isArray(marketplaceRows)?marketplaceRows:[]).map(o=>'<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">'+escAccount(o.product||'Pesanan')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(o.status||'WAITING_PAYMENT')+'</span></div><div class="text-xs text-slate-400 mt-2">Order: '+escAccount(o.order_id||'-')+' · Qty: '+escAccount(o.qty??'-')+'</div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>').join('');
-
-    const total=(Array.isArray(premiumRows)?premiumRows.length:0)+(Array.isArray(marketplaceRows)?marketplaceRows.length:0);
-    if(!total){msg.textContent='Belum ada pesanan untuk akun ini.';return}
-    msg.textContent=total+' pesanan';
-    list.innerHTML=(premiumCards?'<div><div class="text-[10px] tracking-widest text-amber-300 font-black uppercase mb-2">♛ Premium</div><div class="grid gap-2">'+premiumCards+'</div></div>':'')+(marketplaceCards?'<div class="mt-5"><div class="text-[10px] tracking-widest text-slate-500 font-black uppercase mb-2">Marketplace</div><div class="grid gap-2">'+marketplaceCards+'</div></div>':'');
-  }catch(e){msg.textContent='Pesanan belum dapat dimuat. Coba lagi.'}
+function renderAccount(){if(!currentUser)return;const meta=currentUser.user_metadata||{};const name=(meta.full_name||meta.name||currentUser.email||'Akun').trim();const email=(currentUser.email||'').trim().toLowerCase();const role=currentIsAdmin?'Admin':'Member';const premium=currentIsAdmin?'Premium aktif':'Belum aktif';const av=$('accountAvatar'),nm=$('accountName'),em=$('accountEmail'),rl=$('accountRole'),pr=$('accountPremium'),ad=$('adminAccountBtn'),memberActions=$('accountMemberActions'),adminActions=$('accountAdminActions');if(av)av.textContent=name.charAt(0).toUpperCase()||'A';if(nm)nm.textContent=name;if(em)em.textContent=email||'-';if(rl)rl.textContent=role;if(pr)pr.textContent=premium;if(ad)ad.classList.toggle('hidden',!currentIsAdmin);if(memberActions)memberActions.classList.toggle('hidden',currentIsAdmin);if(adminActions)adminActions.classList.toggle('hidden',!currentIsAdmin);const pt=$('accountPremiumText');if(pt)pt.textContent=currentIsAdmin?'Premium aktif gratis sebagai Admin.':'Premium belum aktif. Pilih paket di Premium Tools.';showAccountSection('home')}
+function showAccountSection(section){['accountHomeView','accountOrdersView','accountPremiumView','accountAdminView','accountAdminHistoryView'].forEach(id=>$(id)?.classList.add('hidden'));if(section==='orders'&&!currentIsAdmin){$('accountOrdersView')?.classList.remove('hidden');loadAccountOrders();}else if(section==='premium'){$('accountPremiumView')?.classList.remove('hidden');loadAccountPremiumStatus();}else if(section==='admin'&&currentIsAdmin){$('accountAdminView')?.classList.remove('hidden');}else if(section==='adminHistory'&&currentIsAdmin){$('accountAdminHistoryView')?.classList.remove('hidden');loadAdminPremiumHistory();}else $('accountHomeView')?.classList.remove('hidden')}
+let adminPremiumHistoryRows=[];
+let adminPremiumHistoryLimit=20;
+function premiumStatusText(status){status=String(status||'PENDING_VERIFICATION');return status==='APPROVED'?'AKTIF / DISETUJUI':status==='REJECTED'?'DITOLAK':status==='PENDING_VERIFICATION'?'MENUNGGU VERIFIKASI':status}
+function premiumHistoryFilterRows(){
+  const filter=$('adminPremiumHistoryFilter')?.value||'recent';
+  const now=Date.now(), cutoff=now-30*24*60*60*1000;
+  let rows=adminPremiumHistoryRows.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  if(filter==='pending') rows=rows.filter(o=>String(o.status||'')==='PENDING_VERIFICATION');
+  else if(filter==='recent') rows=rows.filter(o=>String(o.status||'')==='PENDING_VERIFICATION'||new Date(o.created_at||0).getTime()>=cutoff);
+  return rows;
 }
-function escAccount(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function renderAdminPremiumHistory(){
+  const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList'); if(!msg||!list)return;
+  const rows=premiumHistoryFilterRows();
+  if(!rows.length){msg.textContent='Tidak ada order Premium pada filter ini.';list.innerHTML='';return}
+  const visible=rows.slice(0,adminPremiumHistoryLimit);
+  msg.textContent=rows.length+' order Premium · menampilkan '+visible.length;
+  list.innerHTML=visible.map(o=>{
+    const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');
+    return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>';
+  }).join('')+(rows.length>visible.length?'<button type="button" onclick="adminPremiumHistoryLimit+=20;renderAdminPremiumHistory()" class="mt-2 px-4 py-3 rounded-xl border border-slate-700 text-xs font-black text-slate-300">Tampilkan 20 lagi</button>':'');
+}
+async function loadAdminPremiumHistory(){
+  const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList');if(!msg||!list)return;
+  if(!currentUser||!currentIsAdmin){msg.textContent='Akses Admin diperlukan.';list.innerHTML='';return}
+  msg.textContent='Memuat riwayat...';list.innerHTML='';adminPremiumHistoryLimit=20;
+  try{const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});adminPremiumHistoryRows=Array.isArray(rows)?rows:[];renderAdminPremiumHistory()}catch(e){adminPremiumHistoryRows=[];msg.textContent='Riwayat Premium belum dapat dimuat.';console.error(e)}
+}
+
+async function loadAccountOrders(){
+  const msg=$('accountOrdersMsg'),list=$('accountOrdersList');if(!msg||!list)return;
+  msg.textContent='Memuat pesanan Premium...';list.innerHTML='';
+  if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
+  try{
+    const qs=new URLSearchParams({select:'order_id,package,package_id,duration,duration_days,amount,payment_proof_path,payment_proof,status,created_at,verified_at',user_id:'eq.'+currentUser.id,order:'created_at.desc',limit:'30'});
+    const rows=await req('/rest/v1/premium_orders?'+qs.toString());
+    const arr=Array.isArray(rows)?rows:[];
+    const cutoff=Date.now()-30*24*60*60*1000;
+    const visible=arr.filter(o=>String(o.status||'')==='PENDING_VERIFICATION'||new Date(o.created_at||0).getTime()>=cutoff);
+    if(!visible.length){msg.textContent='Belum ada pesanan Premium.';return}
+    msg.textContent=visible.length+' pesanan Premium';
+    list.innerHTML='<div class="text-[10px] tracking-widest text-amber-300 font-black uppercase mb-2">♛ Premium</div><div class="grid gap-2">'+visible.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>'}).join('')+'</div><div class="text-[10px] text-slate-600 mt-3">Order selesai/ditolak akan disembunyikan setelah 30 hari. Data transaksi tetap tersimpan untuk Admin.</div>';
+  }catch(e){msg.textContent='Pesanan Premium belum dapat dimuat. Coba lagi.';console.error(e)}
+}
 async function loadAccountPremiumStatus(){
   const text=$('accountPremiumText'),dates=$('accountPremiumDates');
   if(!currentUser){if(text)text.textContent='Login diperlukan.';return}
