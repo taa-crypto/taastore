@@ -128,67 +128,53 @@ async function loadAdminPremiumHistory(){
   try{const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});adminPremiumHistoryRows=Array.isArray(rows)?rows:[];renderAdminPremiumHistory()}catch(e){adminPremiumHistoryRows=[];msg.textContent='Riwayat Premium belum dapat dimuat.';console.error(e)}
 }
 
-async function loadMyPremiumOrdersData(){
-  if(!currentUser||currentIsAdmin)return [];
-  const errors=[];
-  const normalize=raw=>{
-    if(Array.isArray(raw))return raw;
-    if(Array.isArray(raw?.data))return raw.data;
-    if(Array.isArray(raw?.orders))return raw.orders;
-    if(typeof raw==='string'){try{const parsed=JSON.parse(raw);if(Array.isArray(parsed))return parsed}catch{}}
-    return null;
-  };
-  // Jalur utama: RPC v2 (SECURITY DEFINER + auth.uid()).
-  try{
-    const rows=normalize(await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'}));
-    if(rows?.length)return rows;
-    if(rows)errors.push('get_my_premium_orders_v2 mengembalikan 0 baris');
-  }catch(e){errors.push('get_my_premium_orders_v2: '+(e?.message||e))}
-  // Kompatibilitas: RPC SETOF yang juga sudah disediakan pada repair SQL.
-  try{
-    const rows=normalize(await req('/rest/v1/rpc/get_my_premium_orders',{method:'POST',body:'{}'}));
-    if(rows?.length)return rows;
-    if(rows)errors.push('get_my_premium_orders mengembalikan 0 baris');
-  }catch(e){errors.push('get_my_premium_orders: '+(e?.message||e))}
-  // Fallback REST dengan filter user eksplisit; RLS tetap menjadi pengaman utama.
-  try{
-    const uid=encodeURIComponent(currentUser.id||'');
-    if(!uid)throw Error('ID user tidak tersedia');
-    const rows=await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at&user_id=eq.'+uid+'&order=created_at.desc&limit=30');
-    if(Array.isArray(rows))return rows;
-    throw Error('Respons REST Premium tidak valid');
-  }catch(e){
-    errors.push('REST premium_orders: '+(e?.message||e));
-    console.error('loadMyPremiumOrdersData failed',errors.join(' | '));
-    throw Error('Data pesanan Premium gagal dimuat. '+errors.join(' | '));
-  }
+function getPremiumOrderIds(){
+  try{const a=JSON.parse(localStorage.getItem('taastore_premium_order_ids')||'[]');return Array.isArray(a)?a.filter(Boolean):[]}catch{return []}
 }
-
+function rememberPremiumOrderId(id){
+  if(!id)return;
+  const a=getPremiumOrderIds().filter(x=>x!==id);a.unshift(id);
+  localStorage.setItem('taastore_premium_order_ids',JSON.stringify(a.slice(0,30)));
+}
+async function loadPremiumOrdersBySavedIds(){
+  if(!currentUser||currentIsAdmin)return [];
+  const ids=getPremiumOrderIds();if(!ids.length)return [];
+  const safe=ids.map(id=>encodeURIComponent(id)).join(',');
+  const rows=await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at&order_id=in.('+safe+')&order=created_at.desc&limit=30');
+  return Array.isArray(rows)?rows:[];
+}
+function renderPremiumOrderIntoList(o){
+  const list=$('accountOrdersList');if(!list||!o)return;
+  const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');
+  const html='<div data-premium-order-id="'+escAccount(id)+'" class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>';
+  list.insertAdjacentHTML('afterbegin',html);
+}
 async function loadAccountOrders(){
   const msg=$('accountOrdersMsg'),list=$('accountOrdersList');if(!msg||!list)return;
   msg.textContent='Memuat pesanan Premium yang masih berjalan...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
   try{
-    const all=await loadMyPremiumOrdersData();
+    const all=await loadPremiumOrdersBySavedIds();
     const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION').toUpperCase()));
     if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
     msg.textContent=arr.length+' pesanan Premium sedang berjalan';
-    list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>'}).join('');
-  }catch(e){msg.textContent='Pesanan Premium belum dapat dimuat. Coba lagi.';console.error(e)}
+    arr.forEach(renderPremiumOrderIntoList);
+  }catch(e){msg.textContent='Pesanan Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.';console.error('loadAccountOrders',e)}
 }
 async function loadAccountPremiumHistory(){
   const msg=$('accountHistoryMsg'),list=$('accountHistoryList');if(!msg||!list)return;
   msg.textContent='Memuat riwayat Premium...';list.innerHTML='';
   if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Gunakan Riwayat Premium Admin.':'Login diperlukan.';return}
   try{
-    const rows=await loadMyPremiumOrdersData();
+    const rows=await loadPremiumOrdersBySavedIds();
     const cutoff=Date.now()-30*24*60*60*1000;
     const arr=(Array.isArray(rows)?rows:[]).filter(o=>{const st=String(o.status||'').toUpperCase();return !['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(st)&&new Date(o.created_at||0).getTime()>=cutoff});
     if(!arr.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
     msg.textContent=arr.length+' transaksi Premium';
-    list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'');const date=o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-';const verified=o.verified_at?new Date(o.verified_at).toLocaleString('id-ID'):'';return '<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">Dibuat: '+escAccount(date)+(verified?' · Diverifikasi: '+escAccount(verified):'')+'</div></div>'}).join('')+'<div class="text-[10px] text-slate-600 mt-3">Riwayat buyer ditampilkan 30 hari terakhir agar halaman tetap ringkas. Data transaksi tetap tersimpan.</div>';
-  }catch(e){msg.textContent='Riwayat Premium belum dapat dimuat. Coba lagi.';console.error(e)}
+    list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'');const date=o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-';const verified=o.verified_at?new Date(o.verified_at).toLocaleString('id-ID'):'';return '<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">Dibuat: '+escAccount(date)+(verified?' · Diverifikasi: '+escAccount(verified):'')+'</div></div>'}).join('')+'<div class="text-[10px] text-slate-600 mt-3">Riwayat buyer ditampilkan 30 hari terakhir. Data transaksi tetap tersimpan di database.</div>';
+  }catch(e){msg.textContent='Riwayat Premium belum dapat dimuat dari perangkat ini.';console.error('loadAccountPremiumHistory',e)}
 }
+
 async function loadAccountPremiumStatus(){
   const text=$('accountPremiumText'),dates=$('accountPremiumDates');
   if(!currentUser){if(text)text.textContent='Login diperlukan.';return}
@@ -351,6 +337,7 @@ async function submitPremiumProof(){
     const created=await req('/rest/v1/rpc/create_premium_order_v2',{method:'POST',body:JSON.stringify({p_package:selectedPremiumPackage.package_id})});
     const order=Array.isArray(created)?created[0]:created;
     if(!order?.order_id)throw Error('Order Premium tidak dibuat.');
+    rememberPremiumOrderId(order.order_id);
     const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';
     const path=`${currentUser.id}/${order.order_id}.${ext}`;
     const upload=await fetch(SB+'/storage/v1/object/premium-proofs/'+encodeURIComponent(path).replace(/%2F/g,'/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+token(),'x-upsert':'false','Content-Type':file.type},body:file});
