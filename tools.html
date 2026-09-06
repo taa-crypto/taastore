@@ -130,20 +130,37 @@ async function loadAdminPremiumHistory(){
 
 async function loadMyPremiumOrdersData(){
   if(!currentUser||currentIsAdmin)return [];
-  let lastError=null;
+  const errors=[];
+  const normalize=raw=>{
+    if(Array.isArray(raw))return raw;
+    if(Array.isArray(raw?.data))return raw.data;
+    if(Array.isArray(raw?.orders))return raw.orders;
+    if(typeof raw==='string'){try{const parsed=JSON.parse(raw);if(Array.isArray(parsed))return parsed}catch{}}
+    return null;
+  };
+  // Jalur utama: RPC v2 (SECURITY DEFINER + auth.uid()).
   try{
-    const rpc=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
-    if(Array.isArray(rpc))return rpc;
-    if(Array.isArray(rpc?.data))return rpc.data;
-    if(Array.isArray(rpc?.orders))return rpc.orders;
-    if(typeof rpc==='string'){try{const parsed=JSON.parse(rpc);if(Array.isArray(parsed))return parsed}catch{}}
-    return [];
-  }catch(e){lastError=e}
+    const rows=normalize(await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'}));
+    if(rows?.length)return rows;
+    if(rows)errors.push('get_my_premium_orders_v2 mengembalikan 0 baris');
+  }catch(e){errors.push('get_my_premium_orders_v2: '+(e?.message||e))}
+  // Kompatibilitas: RPC SETOF yang juga sudah disediakan pada repair SQL.
   try{
-    return await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at&order=created_at.desc&limit=30');
+    const rows=normalize(await req('/rest/v1/rpc/get_my_premium_orders',{method:'POST',body:'{}'}));
+    if(rows?.length)return rows;
+    if(rows)errors.push('get_my_premium_orders mengembalikan 0 baris');
+  }catch(e){errors.push('get_my_premium_orders: '+(e?.message||e))}
+  // Fallback REST dengan filter user eksplisit; RLS tetap menjadi pengaman utama.
+  try{
+    const uid=encodeURIComponent(currentUser.id||'');
+    if(!uid)throw Error('ID user tidak tersedia');
+    const rows=await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at&user_id=eq.'+uid+'&order=created_at.desc&limit=30');
+    if(Array.isArray(rows))return rows;
+    throw Error('Respons REST Premium tidak valid');
   }catch(e){
-    console.error('loadMyPremiumOrdersData failed',lastError||e,e);
-    throw e;
+    errors.push('REST premium_orders: '+(e?.message||e));
+    console.error('loadMyPremiumOrdersData failed',errors.join(' | '));
+    throw Error('Data pesanan Premium gagal dimuat. '+errors.join(' | '));
   }
 }
 
