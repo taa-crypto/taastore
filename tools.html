@@ -128,20 +128,50 @@ async function loadAdminPremiumHistory(){
   try{const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});adminPremiumHistoryRows=Array.isArray(rows)?rows:[];renderAdminPremiumHistory()}catch(e){adminPremiumHistoryRows=[];msg.textContent='Riwayat Premium belum dapat dimuat.';console.error(e)}
 }
 
+function premiumOrderStorageKey(uid){return uid?'taastore_premium_order_ids:'+uid:'taastore_premium_order_ids'}
 function getPremiumOrderIds(){
-  try{const a=JSON.parse(localStorage.getItem('taastore_premium_order_ids')||'[]');return Array.isArray(a)?a.filter(Boolean):[]}catch{return []}
+  const keys=[];
+  if(currentUser?.id)keys.push(premiumOrderStorageKey(currentUser.id));
+  keys.push('taastore_premium_order_ids');
+  for(const key of keys){try{const a=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(a)&&a.length)return a.filter(Boolean).slice(0,30)}catch{}}
+  return []
 }
 function rememberPremiumOrderId(id){
   if(!id)return;
+  const key=premiumOrderStorageKey(currentUser?.id);
   const a=getPremiumOrderIds().filter(x=>x!==id);a.unshift(id);
+  localStorage.setItem(key,JSON.stringify(a.slice(0,30)));
+  // Legacy key tetap dipelihara hanya untuk kompatibilitas; ownership tetap diverifikasi oleh user_id di server.
   localStorage.setItem('taastore_premium_order_ids',JSON.stringify(a.slice(0,30)));
+}
+function premiumOrdersFriendlyMessage(kind='orders'){
+  return kind==='history'
+    ? 'Riwayat Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.'
+    : 'Pesanan Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.';
 }
 async function loadPremiumOrdersBySavedIds(){
   if(!currentUser||currentIsAdmin)return [];
-  const ids=getPremiumOrderIds();if(!ids.length)return [];
-  const safe=ids.map(id=>encodeURIComponent(id)).join(',');
-  const rows=await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at&order_id=in.('+safe+')&order=created_at.desc&limit=30');
-  return Array.isArray(rows)?rows:[];
+  const uid=String(currentUser.id||'').trim();
+  if(!uid)throw Error('Identitas akun Premium belum tersedia.');
+  const ids=getPremiumOrderIds();
+  const fields='order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at';
+  // Jalur utama: order ID Premium milik akun aktif. user_id tetap wajib agar ID dari perangkat lain tidak ikut terbaca.
+  if(ids.length){
+    const safe=ids.map(id=>encodeURIComponent(String(id))).join(',');
+    try{
+      const rows=await req('/rest/v1/premium_orders?select='+fields+'&user_id=eq.'+encodeURIComponent(uid)+'&order_id=in.('+safe+')&order=created_at.desc&limit=30');
+      if(Array.isArray(rows)&&rows.length)return rows;
+    }catch(e){console.warn('Premium saved-order lookup:',e)}
+  }
+  // Recovery: bila indeks perangkat kosong/stale, ambil order Premium terbaru milik akun aktif.
+  // Ini bukan jalur Marketplace dan tidak memakai RPC order lama.
+  const rows=await req('/rest/v1/premium_orders?select='+fields+'&user_id=eq.'+encodeURIComponent(uid)+'&order=created_at.desc&limit=30');
+  if(!Array.isArray(rows))throw Error('Respons Premium tidak valid.');
+  if(rows.length){
+    const ids2=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
+    if(ids2.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids2));
+  }
+  return rows;
 }
 function renderPremiumOrderIntoList(o){
   const list=$('accountOrdersList');if(!list||!o)return;
@@ -159,7 +189,7 @@ async function loadAccountOrders(){
     if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
     msg.textContent=arr.length+' pesanan Premium sedang berjalan';
     arr.forEach(renderPremiumOrderIntoList);
-  }catch(e){msg.textContent='Pesanan Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.';console.error('loadAccountOrders',e)}
+  }catch(e){msg.textContent=premiumOrdersFriendlyMessage('orders');console.error('loadAccountOrders',e)}
 }
 async function loadAccountPremiumHistory(){
   const msg=$('accountHistoryMsg'),list=$('accountHistoryList');if(!msg||!list)return;
@@ -172,7 +202,7 @@ async function loadAccountPremiumHistory(){
     if(!arr.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
     msg.textContent=arr.length+' transaksi Premium';
     list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'');const date=o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-';const verified=o.verified_at?new Date(o.verified_at).toLocaleString('id-ID'):'';return '<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">Dibuat: '+escAccount(date)+(verified?' · Diverifikasi: '+escAccount(verified):'')+'</div></div>'}).join('')+'<div class="text-[10px] text-slate-600 mt-3">Riwayat buyer ditampilkan 30 hari terakhir. Data transaksi tetap tersimpan di database.</div>';
-  }catch(e){msg.textContent='Riwayat Premium belum dapat dimuat dari perangkat ini.';console.error('loadAccountPremiumHistory',e)}
+  }catch(e){msg.textContent=premiumOrdersFriendlyMessage('history');console.error('loadAccountPremiumHistory',e)}
 }
 
 async function loadAccountPremiumStatus(){
