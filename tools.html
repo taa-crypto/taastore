@@ -130,10 +130,20 @@ async function loadAdminPremiumHistory(){
 
 async function loadMyPremiumOrdersData(){
   if(!currentUser||currentIsAdmin)return [];
+  let lastError=null;
+  try{
+    const rpc=await req('/rest/v1/rpc/get_my_premium_orders_v2',{method:'POST',body:'{}'});
+    if(Array.isArray(rpc))return rpc;
+    if(Array.isArray(rpc?.data))return rpc.data;
+    if(Array.isArray(rpc?.orders))return rpc.orders;
+    if(typeof rpc==='string'){try{const parsed=JSON.parse(rpc);if(Array.isArray(parsed))return parsed}catch{}}
+    return [];
+  }catch(e){lastError=e}
   try{
     return await req('/rest/v1/premium_orders?select=order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at&order=created_at.desc&limit=30');
-  }catch{
-    return [];
+  }catch(e){
+    console.error('loadMyPremiumOrdersData failed',lastError||e,e);
+    throw e;
   }
 }
 
