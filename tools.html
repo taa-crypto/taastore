@@ -151,18 +151,63 @@ function premiumOrdersFriendlyMessage(kind='orders'){
 }
 async function loadPremiumOrdersBySavedIds(){
   if(!currentUser||currentIsAdmin)return [];
-  if(!String(currentUser.id||'').trim())throw Error('Identitas akun Premium belum tersedia.');
+  const uid=String(currentUser.id||'').trim();
+  if(!uid)throw Error('Identitas akun Premium belum tersedia.');
+  const fields='order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at,payment_proof_path';
+  const failures=[];
   const normalize=raw=>Array.isArray(raw)?raw:(Array.isArray(raw?.data)?raw.data:(Array.isArray(raw?.orders)?raw.orders:null));
-  // Jalur utama Premium: RPC khusus akun Premium. Ownership selalu auth.uid(), bukan perangkat dan bukan Marketplace.
-  // RPC ini sengaja unik agar tidak bergantung pada function Premium lama yang sebelumnya bermasalah.
-  const rows=normalize(await req('/rest/v1/rpc/premium_get_my_orders_v3',{method:'POST',body:'{}'}));
-  if(!rows)throw Error('Respons Pesanan Premium tidak valid.');
-  if(rows.length){
-    const uid=String(currentUser.id).trim();
-    const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
-    if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
+
+  // 1) Direct table read. This is the simplest PostgREST path and is protected
+  //    by RLS: user_id must equal auth.uid(). No Marketplace ownership is used.
+  try{
+    const rows=await req('/rest/v1/premium_orders?select='+fields+'&user_id=eq.'+encodeURIComponent(uid)+'&order=created_at.desc&limit=30');
+    if(Array.isArray(rows)&&rows.length){
+      const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
+      if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
+      return rows;
+    }
+  }catch(e){failures.push('rest:'+String(e?.message||e))}
+
+  // 2) JSON-returning Premium RPC. Unlike SETOF, this deliberately returns
+  //    one JSONB value so the browser only has to parse a normal JSON response.
+  try{
+    const rows=normalize(await req('/rest/v1/rpc/premium_get_my_orders_v4',{method:'POST',body:'{}'}));
+    if(!rows)throw Error('Respons Pesanan Premium V4 tidak valid.');
+    if(rows.length){
+      const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
+      if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
+    }
+    return rows;
+  }catch(e){failures.push('rpc-v4:'+String(e?.message||e))}
+
+  // 3) Existing V3 RPC retained as a compatibility path.
+  try{
+    const rows=normalize(await req('/rest/v1/rpc/premium_get_my_orders_v3',{method:'POST',body:'{}'}));
+    if(!rows)throw Error('Respons Pesanan Premium V3 tidak valid.');
+    if(rows.length){
+      const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
+      if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
+    }
+    return rows;
+  }catch(e){failures.push('rpc-v3:'+String(e?.message||e))}
+
+  // 4) Last-resort recovery by saved IDs, still constrained by user_id.
+  const ids=getPremiumOrderIds();
+  if(ids.length){
+    const recovered=[];
+    for(const id of ids.slice(0,30)){
+      try{
+        const rows=await req('/rest/v1/premium_orders?select='+fields+'&user_id=eq.'+encodeURIComponent(uid)+'&order_id=eq.'+encodeURIComponent(String(id))+'&limit=1');
+        if(Array.isArray(rows)&&rows[0])recovered.push(rows[0]);
+      }catch(e){failures.push('id:'+String(id)+':'+String(e?.message||e))}
+    }
+    if(recovered.length)return recovered.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
   }
-  return rows;
+
+  const detail=failures.join(' | ');
+  const err=Error(detail||'Pesanan Premium kosong.');
+  err.premiumLookupFailures=failures;
+  throw err;
 }
 function renderPremiumOrderIntoList(o){
   const list=$('accountOrdersList');if(!list||!o)return;
