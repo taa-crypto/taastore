@@ -81,361 +81,420 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 </div>
 </div><p id="authMsg" class="text-xs mt-3"></p></div></div><script>
 const SB='https://deqzgidcjpvrlxhtkruq.supabase.co';
-const $=id=>document.getElementById(id);
 const KEY='sb_publishable_7XH0-4RhMH_YbkMny-ngFQ_wLIExKR6';
-let signup=false,currentUser=null,currentIsAdmin=false,pendingPremiumCheckout=false;
-const token=()=>localStorage.getItem('taastore_access_token')||'';
-const headers=()=>{const h={apikey:KEY,'Content-Type':'application/json'};const t=token();if(t)h.Authorization='Bearer '+t;return h};
-async function rawReq(path,opt={}){const r=await fetch(SB+path,{...opt,headers:{...headers(),...(opt.headers||{})}});let d=null;try{d=await r.json()}catch{}if(!r.ok){const e=Error(d?.msg||d?.message||d?.error_description||d?.error||`Request gagal (${r.status})`);e.status=r.status;e.data=d;throw e}return d}
-async function req(path,opt={},retry=true){try{return await rawReq(path,opt)}catch(e){if(retry&&(e.status===401||e.status===403)&&await refreshSession())return rawReq(path,opt);throw e}}
-function toggleMenu(){const m=$('menu'),b=$('hambBtn');if(!m)return;const open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false')}
-function closeMenu(){const m=$('menu'),b=$('hambBtn');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false')}
+const $=id=>document.getElementById(id);
+
+let signup=false;
+let currentUser=null;
+let currentIsAdmin=false;
+let pendingPremiumCheckout=false;
 let pendingAccountSection='';
-async function openAuth(section=''){if(section){pendingAccountSection=section;sessionStorage.setItem('taastore_pending_account_section',section)}closeMenu();const m=$('authModal');if(!m)return;m.classList.add('open');const msg=$('authMsg');if(msg)msg.textContent='Memuat akun...';await refreshAuth();const logged=!!currentUser;const title=$('authTitle'),sub=$('authSubtitle'),login=$('loginView'),account=$('accountView');if(title)title.textContent=logged?'Akun TAASTORE':signup?'Daftar TAASTORE':'Login TAASTORE';if(sub)sub.textContent=logged?'Kelola akun, Premium, dan pesanan kamu.':'Login untuk akun, riwayat, dan Premium.';if(login)login.classList.toggle('hidden',logged);if(account)account.classList.toggle('hidden',!logged);if(msg)msg.textContent='';if(logged){renderAccount();if(pendingAccountSection){const sec=pendingAccountSection;pendingAccountSection='';showAccountSection(sec)}}}
-function openAuthFromMenu(){closeMenu();openAuth()}
-function openHistory(){pendingAccountSection='history';openAuth('history')}
-function openHistoryFromMenu(){closeMenu();openHistory()}
-function closeAuth(cancelPending=true){const m=$('authModal');if(m)m.classList.remove('open');closeMenu();if(cancelPending){pendingPremiumCheckout=false;sessionStorage.removeItem('taastore_pending_premium_package');sessionStorage.removeItem('taastore_pending_account_section')}}
-function toggleAuthMode(){signup=!signup;const t=$('authTitle'),s=$('authSwitch'),b=$('authEmailSubmit');if(t)t.textContent=signup?'Daftar TAASTORE':'Login TAASTORE';if(s)s.textContent=signup?'Sudah punya akun? Login':'Belum punya akun? Daftar';if(b)b.textContent=signup?'Daftar dengan Email':'Lanjut dengan Email'}
-function renderAccount(){if(!currentUser)return;const meta=currentUser.user_metadata||{};const name=(meta.full_name||meta.name||currentUser.email||'Akun').trim();const email=(currentUser.email||'').trim().toLowerCase();const role=currentIsAdmin?'Admin':'Member';const premium=currentIsAdmin?'Premium aktif':'Belum aktif';const av=$('accountAvatar'),nm=$('accountName'),em=$('accountEmail'),rl=$('accountRole'),pr=$('accountPremium'),ad=$('adminAccountBtn'),memberActions=$('accountMemberActions'),adminActions=$('accountAdminActions');if(av)av.textContent=name.charAt(0).toUpperCase()||'A';if(nm)nm.textContent=name;if(em)em.textContent=email||'-';if(rl)rl.textContent=role;if(pr)pr.textContent=premium;if(ad)ad.classList.toggle('hidden',!currentIsAdmin);if(memberActions)memberActions.classList.toggle('hidden',currentIsAdmin);if(adminActions)adminActions.classList.toggle('hidden',!currentIsAdmin);const pt=$('accountPremiumText');if(pt)pt.textContent=currentIsAdmin?'Premium aktif gratis sebagai Admin.':'Premium belum aktif. Pilih paket di Premium Tools.';showAccountSection('home')}
-function showAccountSection(section){['accountHomeView','accountOrdersView','accountHistoryView','accountPremiumView','accountAdminView','accountAdminHistoryView'].forEach(id=>$(id)?.classList.add('hidden'));if(section==='history'){section=currentIsAdmin?'adminHistory':'history';}if(section==='orders'&&!currentIsAdmin){$('accountOrdersView')?.classList.remove('hidden');loadAccountOrders();}else if(section==='history'&&!currentIsAdmin){$('accountHistoryView')?.classList.remove('hidden');loadAccountPremiumHistory();}else if(section==='premium'){$('accountPremiumView')?.classList.remove('hidden');loadAccountPremiumStatus();}else if(section==='admin'&&currentIsAdmin){$('accountAdminView')?.classList.remove('hidden');}else if(section==='adminHistory'&&currentIsAdmin){$('accountAdminHistoryView')?.classList.remove('hidden');loadAdminPremiumHistory();}else $('accountHomeView')?.classList.remove('hidden')}
+let selectedPremiumPackage=null;
+let premiumPackages=[
+  {package_id:'1_day',label:'1 Hari',amount:5000,duration:1},
+  {package_id:'7_day',label:'7 Hari',amount:20000,duration:7},
+  {package_id:'30_day',label:'30 Hari',amount:50000,duration:30},
+  {package_id:'90_day',label:'90 Hari',amount:120000,duration:90}
+];
 let adminPremiumHistoryRows=[];
 let adminPremiumHistoryLimit=20;
-function premiumStatusText(status){status=String(status||'PENDING_VERIFICATION');return status==='APPROVED'?'AKTIF / DISETUJUI':status==='REJECTED'?'DITOLAK':status==='PENDING_VERIFICATION'?'MENUNGGU VERIFIKASI':status}
-function premiumHistoryFilterRows(){
-  const filter=$('adminPremiumHistoryFilter')?.value||'recent';
-  const now=Date.now(), cutoff=now-30*24*60*60*1000;
-  let rows=adminPremiumHistoryRows.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-  if(filter==='pending') rows=rows.filter(o=>String(o.status||'')==='PENDING_VERIFICATION');
-  else if(filter==='recent') rows=rows.filter(o=>String(o.status||'')==='PENDING_VERIFICATION'||new Date(o.created_at||0).getTime()>=cutoff);
+
+const token=()=>localStorage.getItem('taastore_access_token')||'';
+const refreshToken=()=>localStorage.getItem('taastore_refresh_token')||'';
+const esc=s=>String(s??'').replace(/[&<>\'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));
+const money=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
+
+async function rawReq(path,opt={}){
+  const h={apikey:KEY,'Content-Type':'application/json',...(opt.headers||{})};
+  if(token())h.Authorization='Bearer '+token();
+  const r=await fetch(SB+path,{...opt,headers:h});
+  let d=null;try{d=await r.json()}catch{}
+  if(!r.ok){const e=new Error(d?.message||d?.msg||d?.error_description||d?.error||`Request gagal (${r.status})`);e.status=r.status;e.data=d;throw e}
+  return d;
+}
+
+async function refreshSession(){
+  const rt=refreshToken();
+  if(!rt)return false;
+  try{
+    const r=await fetch(SB+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:rt})});
+    const d=await r.json().catch(()=>null);
+    if(!r.ok||!d?.access_token)throw new Error('refresh failed');
+    localStorage.setItem('taastore_access_token',d.access_token);
+    if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);
+    return true;
+  }catch{return false}
+}
+
+async function req(path,opt={},retry=true){
+  try{return await rawReq(path,opt)}
+  catch(e){
+    if(retry&&(e.status===401||e.status===403)&&await refreshSession())return rawReq(path,opt);
+    throw e;
+  }
+}
+
+async function refreshAuth(){
+  try{
+    let u;
+    try{u=await req('/auth/v1/user')}catch(e){if(!(await refreshSession()))throw e;u=await req('/auth/v1/user')}
+    currentUser=u?.user||u;
+    if(!currentUser?.id)throw new Error('User session tidak valid.');
+    currentIsAdmin=false;
+    const email=String(currentUser.email||'').trim().toLowerCase();
+    if(email){
+      try{
+        const rows=await req('/rest/v1/taastore_admin_access?select=is_admin&email=eq.'+encodeURIComponent(email)+'&limit=1');
+        currentIsAdmin=rows?.[0]?.is_admin===true;
+      }catch{}
+      if(email==='tirtatyasamal@gmail.com')currentIsAdmin=true;
+    }
+    const name=(currentUser.user_metadata?.full_name||currentUser.user_metadata?.name||email.split('@')[0]||'Akun').trim();
+    const btn=$('accountBtn');
+    if(btn){btn.textContent=currentIsAdmin?name+' · Admin':name;btn.title='Buka Akun Saya'}
+    return true;
+  }catch{
+    currentUser=null;currentIsAdmin=false;
+    const btn=$('accountBtn');if(btn){btn.textContent='Login';btn.title='Login'}
+    return false;
+  }
+}
+
+function toggleMenu(){const m=$('menu'),b=$('hambBtn');if(!m)return;const open=m.classList.toggle('open');b?.setAttribute('aria-expanded',open?'true':'false')}
+function closeMenu(){const m=$('menu'),b=$('hambBtn');m?.classList.remove('open');b?.setAttribute('aria-expanded','false')}
+
+function openAuth(section=''){
+  if(section){pendingAccountSection=section;sessionStorage.setItem('taastore_pending_account_section',section)}
+  closeMenu();
+  const m=$('authModal');if(!m)return;
+  m.classList.add('open');
+  refreshAuth().then(()=>{
+    const logged=!!currentUser;
+    $('loginView')?.classList.toggle('hidden',logged);
+    $('accountView')?.classList.toggle('hidden',!logged);
+    $('authTitle').textContent=logged?'Akun TAASTORE':(signup?'Daftar TAASTORE':'Login TAASTORE');
+    $('authSubtitle').textContent=logged?'Kelola akun, Premium, dan pesanan kamu.':'Login untuk akun, riwayat, dan Premium.';
+    $('authMsg').textContent='';
+    if(logged){renderAccount();if(pendingAccountSection){const sec=pendingAccountSection;pendingAccountSection='';showAccountSection(sec)}}
+  });
+}
+function openAuthFromMenu(){openAuth()}
+function openHistoryFromMenu(){openAuth('history')}
+function closeAuth(cancelPending=true){$('authModal')?.classList.remove('open');closeMenu();if(cancelPending){pendingPremiumCheckout=false;sessionStorage.removeItem('taastore_pending_premium_package');sessionStorage.removeItem('taastore_pending_account_section')}}
+function toggleAuthMode(){signup=!signup;$('authTitle').textContent=signup?'Daftar TAASTORE':'Login TAASTORE';$('authSwitch').textContent=signup?'Sudah punya akun? Login':'Belum punya akun? Daftar';$('authEmailSubmit').textContent=signup?'Daftar dengan Email':'Lanjut dengan Email'}
+
+function openPremiumTools(){closeAuth();showTool('premium');window.scrollTo({top:0,behavior:'smooth'})}
+
+function renderAccount(){
+  if(!currentUser)return;
+  const meta=currentUser.user_metadata||{};
+  const name=(meta.full_name||meta.name||currentUser.email||'Akun').trim();
+  $('accountAvatar').textContent=name.charAt(0).toUpperCase()||'A';
+  $('accountName').textContent=name;
+  $('accountEmail').textContent=currentUser.email||'-';
+  $('accountRole').textContent=currentIsAdmin?'Admin':'Member';
+  $('accountPremium').textContent=currentIsAdmin?'Premium aktif':'Belum aktif';
+  $('accountPremiumText').textContent=currentIsAdmin?'Premium aktif gratis sebagai Admin.':'Memuat status Premium...';
+  $('accountMemberActions')?.classList.toggle('hidden',currentIsAdmin);
+  $('accountAdminActions')?.classList.toggle('hidden',!currentIsAdmin);
+  $('adminAccountBtn')?.classList.toggle('hidden',!currentIsAdmin);
+  showAccountSection('home');
+}
+
+function showAccountSection(section){
+  ['accountHomeView','accountOrdersView','accountHistoryView','accountPremiumView','accountAdminView','accountAdminHistoryView'].forEach(id=>$(id)?.classList.add('hidden'));
+  if(section==='history')section=currentIsAdmin?'adminHistory':'history';
+  if(section==='orders'&&!currentIsAdmin){$('accountOrdersView')?.classList.remove('hidden');loadAccountOrders();return}
+  if(section==='history'&&!currentIsAdmin){$('accountHistoryView')?.classList.remove('hidden');loadAccountPremiumHistory();return}
+  if(section==='premium'){$('accountPremiumView')?.classList.remove('hidden');loadAccountPremiumStatus();return}
+  if(section==='admin'&&currentIsAdmin){$('accountAdminView')?.classList.remove('hidden');return}
+  if(section==='adminHistory'&&currentIsAdmin){$('accountAdminHistoryView')?.classList.remove('hidden');loadAdminPremiumHistory();return}
+  $('accountHomeView')?.classList.remove('hidden');
+}
+
+function premiumStatusText(status){
+  const s=String(status||'PENDING_VERIFICATION').toUpperCase();
+  if(s==='APPROVED')return 'DISETUJUI';
+  if(s==='REJECTED')return 'DITOLAK';
+  return 'MENUNGGU VERIFIKASI';
+}
+
+function renderPremiumRows(list,rows,mode){
+  if(!list)return;
+  if(!rows.length){list.innerHTML='';return}
+  list.innerHTML=rows.map(o=>{
+    const id=String(o.order_id||'');
+    const days=Number(o.duration||0);
+    const status=String(o.status||'PENDING_VERIFICATION');
+    const date=o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-';
+    const verified=o.verified_at?new Date(o.verified_at).toLocaleString('id-ID'):'';
+    return `<article class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
+      <div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium ${esc(days+' Hari')}</b><span class="text-[10px] text-amber-300 font-black">${esc(premiumStatusText(status))}</span></div>
+      <div class="text-xs text-slate-300 mt-2">${money(o.amount)} · Order: <b class="text-cyan-300">#${esc(id.slice(-12))}</b></div>
+      <div class="text-xs text-slate-500 mt-1">Dibuat: ${esc(date)}${verified?' · Diverifikasi: '+esc(verified):''}</div>
+      ${mode==='admin'&&status==='PENDING_VERIFICATION'?`<div class="flex gap-2 mt-3"><button type="button" onclick="verifyPremiumOrder('${esc(id)}',true)" class="flex-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 py-2.5 text-xs font-black">Setujui</button><button type="button" onclick="verifyPremiumOrder('${esc(id)}',false)" class="flex-1 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 py-2.5 text-xs font-black">Tolak</button></div>`:''}
+    </article>`;
+  }).join('');
+}
+
+async function getMyPremiumOrders(){
+  if(!currentUser||currentIsAdmin)throw new Error('LOGIN_REQUIRED');
+  // Single source of truth: authenticated Supabase RPC uses auth.uid().
+  const raw=await req('/rest/v1/rpc/premium_get_my_orders',{method:'POST',body:'{}'});
+  const rows=Array.isArray(raw)?raw:(Array.isArray(raw?.orders)?raw.orders:[]);
   return rows;
 }
-function renderAdminPremiumHistory(){
-  const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList'); if(!msg||!list)return;
-  const rows=premiumHistoryFilterRows();
-  if(!rows.length){msg.textContent='Tidak ada order Premium pada filter ini.';list.innerHTML='';return}
-  const visible=rows.slice(0,adminPremiumHistoryLimit);
-  msg.textContent=rows.length+' order Premium · menampilkan '+visible.length;
-  list.innerHTML=visible.map(o=>{
-    const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');
-    return '<div class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>';
-  }).join('')+(rows.length>visible.length?'<button type="button" onclick="adminPremiumHistoryLimit+=20;renderAdminPremiumHistory()" class="mt-2 px-4 py-3 rounded-xl border border-slate-700 text-xs font-black text-slate-300">Tampilkan 20 lagi</button>':'');
-}
-async function loadAdminPremiumHistory(){
-  const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList');if(!msg||!list)return;
-  if(!currentUser||!currentIsAdmin){msg.textContent='Akses Admin diperlukan.';list.innerHTML='';return}
-  msg.textContent='Memuat riwayat...';list.innerHTML='';adminPremiumHistoryLimit=20;
-  try{const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});adminPremiumHistoryRows=Array.isArray(rows)?rows:[];renderAdminPremiumHistory()}catch(e){adminPremiumHistoryRows=[];msg.textContent='Riwayat Premium belum dapat dimuat.';console.error(e)}
-}
 
-function premiumOrderStorageKey(uid){return uid?'taastore_premium_order_ids:'+uid:'taastore_premium_order_ids'}
-function getPremiumOrderIds(){
-  const keys=[];
-  if(currentUser?.id)keys.push(premiumOrderStorageKey(currentUser.id));
-  keys.push('taastore_premium_order_ids');
-  for(const key of keys){try{const a=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(a)&&a.length)return a.filter(Boolean).slice(0,30)}catch{}}
-  return []
-}
-function rememberPremiumOrderId(id){
-  if(!id)return;
-  const key=premiumOrderStorageKey(currentUser?.id);
-  const a=getPremiumOrderIds().filter(x=>x!==id);a.unshift(id);
-  localStorage.setItem(key,JSON.stringify(a.slice(0,30)));
-  // Legacy key tetap dipelihara hanya untuk kompatibilitas; ownership tetap diverifikasi oleh user_id di server.
-  localStorage.setItem('taastore_premium_order_ids',JSON.stringify(a.slice(0,30)));
-}
-function premiumOrdersFriendlyMessage(kind='orders'){
-  return kind==='history'
-    ? 'Riwayat Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.'
-    : 'Pesanan Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.';
-}
-async function loadPremiumOrdersBySavedIds(){
-  if(!currentUser||currentIsAdmin)return [];
-  const uid=String(currentUser.id||'').trim();
-  if(!uid)throw Error('Identitas akun Premium belum tersedia.');
-  const fields='order_id,package,duration,amount,status,created_at,verified_at,payment_proof';
-  const failures=[];
-  const normalize=raw=>Array.isArray(raw)?raw:(Array.isArray(raw?.data)?raw.data:(Array.isArray(raw?.orders)?raw.orders:null));
-
-  // 1) Direct table read. This is the simplest PostgREST path and is protected
-  //    by RLS: user_id must equal auth.uid(). No Marketplace ownership is used.
-  try{
-    const rows=await req('/rest/v1/premium_orders?select='+fields+'&user_id=eq.'+encodeURIComponent(uid)+'&order=created_at.desc&limit=30');
-    if(Array.isArray(rows)&&rows.length){
-      const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
-      if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
-      return rows;
-    }
-  }catch(e){failures.push('rest:'+String(e?.message||e))}
-
-  // 2) JSON-returning Premium RPC. Unlike SETOF, this deliberately returns
-  //    one JSONB value so the browser only has to parse a normal JSON response.
-  try{
-    const rows=normalize(await req('/rest/v1/rpc/premium_get_my_orders_v4',{method:'POST',body:'{}'}));
-    if(!rows)throw Error('Respons Pesanan Premium V4 tidak valid.');
-    if(rows.length){
-      const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
-      if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
-    }
-    return rows;
-  }catch(e){failures.push('rpc-v4:'+String(e?.message||e))}
-
-  // 3) Existing V3 RPC retained as a compatibility path.
-  try{
-    const rows=normalize(await req('/rest/v1/rpc/premium_get_my_orders_v3',{method:'POST',body:'{}'}));
-    if(!rows)throw Error('Respons Pesanan Premium V3 tidak valid.');
-    if(rows.length){
-      const ids=rows.map(o=>o?.order_id).filter(Boolean).slice(0,30);
-      if(ids.length)localStorage.setItem(premiumOrderStorageKey(uid),JSON.stringify(ids));
-    }
-    return rows;
-  }catch(e){failures.push('rpc-v3:'+String(e?.message||e))}
-
-  // 4) Last-resort recovery by saved IDs, still constrained by user_id.
-  const ids=getPremiumOrderIds();
-  if(ids.length){
-    const recovered=[];
-    for(const id of ids.slice(0,30)){
-      try{
-        const rows=await req('/rest/v1/premium_orders?select='+fields+'&user_id=eq.'+encodeURIComponent(uid)+'&order_id=eq.'+encodeURIComponent(String(id))+'&limit=1');
-        if(Array.isArray(rows)&&rows[0])recovered.push(rows[0]);
-      }catch(e){failures.push('id:'+String(id)+':'+String(e?.message||e))}
-    }
-    if(recovered.length)return recovered.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-  }
-
-  const detail=failures.join(' | ');
-  const err=Error(detail||'Pesanan Premium kosong.');
-  err.premiumLookupFailures=failures;
-  throw err;
-}
-function renderPremiumOrderIntoList(o){
-  const list=$('accountOrdersList');if(!list||!o)return;
-  const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'PENDING_VERIFICATION');
-  const html='<div data-premium-order-id="'+escAccount(id)+'" class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4"><div class="flex justify-between gap-3"><b class="text-sm text-amber-200">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">'+escAccount(o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-')+'</div></div>';
-  list.insertAdjacentHTML('afterbegin',html);
-}
 async function loadAccountOrders(){
   const msg=$('accountOrdersMsg'),list=$('accountOrdersList');if(!msg||!list)return;
+  if(!currentUser||currentIsAdmin){msg.textContent='Login diperlukan.';list.innerHTML='';return}
   msg.textContent='Memuat pesanan Premium yang masih berjalan...';list.innerHTML='';
-  if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Riwayat Premium Admin tersedia di menu Riwayat Premium.':'Login diperlukan.';return}
   try{
-    const all=await loadPremiumOrdersBySavedIds();
-    const arr=all.filter(o=>['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(String(o.status||'PENDING_VERIFICATION').toUpperCase()));
-    if(!arr.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
-    msg.textContent=arr.length+' pesanan Premium sedang berjalan';
-    arr.forEach(renderPremiumOrderIntoList);
-  }catch(e){msg.textContent=premiumOrdersFriendlyMessage('orders');console.error('loadAccountOrders',e)}
+    const rows=await getMyPremiumOrders();
+    const pending=rows.filter(o=>String(o.status||'').toUpperCase()==='PENDING_VERIFICATION');
+    if(!pending.length){msg.textContent='Tidak ada pesanan Premium yang sedang berjalan.';return}
+    msg.textContent=pending.length+' pesanan Premium sedang berjalan';
+    renderPremiumRows(list,pending,'buyer');
+  }catch(e){console.error('Premium orders:',e);msg.textContent='Pesanan Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.'}
 }
+
 async function loadAccountPremiumHistory(){
   const msg=$('accountHistoryMsg'),list=$('accountHistoryList');if(!msg||!list)return;
+  if(!currentUser||currentIsAdmin){msg.textContent='Login diperlukan.';list.innerHTML='';return}
   msg.textContent='Memuat riwayat Premium...';list.innerHTML='';
-  if(!currentUser||currentIsAdmin){msg.textContent=currentIsAdmin?'Gunakan Riwayat Premium Admin.':'Login diperlukan.';return}
   try{
-    const rows=await loadPremiumOrdersBySavedIds();
     const cutoff=Date.now()-30*24*60*60*1000;
-    const arr=(Array.isArray(rows)?rows:[]).filter(o=>{const st=String(o.status||'').toUpperCase();return !['PENDING_VERIFICATION','PROCESSING','WAITING_VERIFICATION','AWAITING_VERIFICATION'].includes(st)&&new Date(o.created_at||0).getTime()>=cutoff});
-    if(!arr.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
-    msg.textContent=arr.length+' transaksi Premium';
-    list.innerHTML=arr.map(o=>{const id=String(o.order_id||''),short=id.slice(-12),days=Number(o.duration||o.duration_days||0),status=String(o.status||'');const date=o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-';const verified=o.verified_at?new Date(o.verified_at).toLocaleString('id-ID'):'';return '<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div class="flex justify-between gap-3"><b class="text-sm">♛ Premium '+escAccount(days+' Hari')+'</b><span class="text-[10px] text-amber-300 font-black">'+escAccount(premiumStatusText(status))+'</span></div><div class="text-xs text-slate-300 mt-2">Rp'+Number(o.amount||0).toLocaleString('id-ID')+' · Order: <b class="text-cyan-300">#'+escAccount(short)+'</b></div><div class="text-xs text-slate-500 mt-1">Dibuat: '+escAccount(date)+(verified?' · Diverifikasi: '+escAccount(verified):'')+'</div></div>'}).join('')+'<div class="text-[10px] text-slate-600 mt-3">Riwayat buyer ditampilkan 30 hari terakhir. Data transaksi tetap tersimpan di database.</div>';
-  }catch(e){msg.textContent=premiumOrdersFriendlyMessage('history');console.error('loadAccountPremiumHistory',e)}
+    const rows=(await getMyPremiumOrders()).filter(o=>String(o.status||'').toUpperCase()!=='PENDING_VERIFICATION'&&new Date(o.created_at||0).getTime()>=cutoff);
+    if(!rows.length){msg.textContent='Belum ada riwayat Premium dalam 30 hari terakhir.';return}
+    msg.textContent=rows.length+' transaksi Premium';
+    renderPremiumRows(list,rows,'buyer');
+  }catch(e){console.error('Premium history:',e);msg.textContent='Riwayat Premium belum dapat dimuat dari perangkat ini. Jika baru selesai checkout, buka kembali setelah order berhasil tersimpan.'}
 }
 
 async function loadAccountPremiumStatus(){
   const text=$('accountPremiumText'),dates=$('accountPremiumDates');
-  if(!currentUser){if(text)text.textContent='Login diperlukan.';return}
-  if(currentIsAdmin){if(text)text.textContent='Premium aktif gratis sebagai Admin.';if(dates)dates.textContent='';return}
-  if(text)text.textContent='Memuat status Premium...'; if(dates)dates.textContent='';
+  if(!currentUser){text.textContent='Login diperlukan.';dates.textContent='';return}
+  if(currentIsAdmin){text.textContent='Premium aktif gratis sebagai Admin.';dates.textContent='';return}
+  text.textContent='Memuat status Premium...';dates.textContent='';
   try{
-    const rows=await req('/rest/v1/rpc/get_my_premium_status',{method:'POST',body:'{}'});
-    const st=Array.isArray(rows)?rows[0]:rows;
-    const expiry=st?.premium_expiry?new Date(st.premium_expiry):null;
-    const start=st?.premium_start?new Date(st.premium_start):null;
-    if(st?.is_active&&expiry&&Number.isFinite(expiry.getTime())){
-      if(text)text.textContent='Premium aktif sampai '+expiry.toLocaleString('id-ID')+'. Kamu bisa membeli paket lagi untuk memperpanjang masa aktif.';
-      if(dates)dates.textContent=(start&&Number.isFinite(start.getTime())?'Mulai: '+start.toLocaleDateString('id-ID')+' · ':'')+'Berakhir: '+expiry.toLocaleDateString('id-ID');
-    }else{
-      if(text)text.textContent='Premium belum aktif. Pilih paket untuk mulai berlangganan.';
-      if(dates)dates.textContent='';
-    }
-  }catch(e){if(text)text.textContent='Status Premium belum dapat dimuat. Kamu tetap bisa memilih paket untuk membeli atau memperpanjang.'}
+    const raw=await req('/rest/v1/rpc/get_my_premium_status',{method:'POST',body:'{}'});
+    const st=Array.isArray(raw)?raw[0]:raw;
+    // Current database contract returns premium_until + is_active.
+    const expiry=st?.premium_until?new Date(st.premium_until):null;
+    if(st?.is_active&&expiry&&!Number.isNaN(expiry.getTime())){
+      text.textContent='Premium aktif sampai '+expiry.toLocaleString('id-ID')+'. Paket berikutnya akan menambah masa aktif.';
+      dates.textContent='Berakhir: '+expiry.toLocaleDateString('id-ID');
+    }else text.textContent='Premium belum aktif. Pilih paket untuk mulai berlangganan.';
+  }catch(e){console.error('Premium status:',e);text.textContent='Status Premium belum dapat dimuat. Kamu tetap bisa memilih paket.'}
 }
-function openPremiumTools(){closeAuth();window.location.href='tools.html#premium'}
-function base64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
-function randomVerifier(n=64){const a=new Uint8Array(n);crypto.getRandomValues(a);return base64Url(a)}
-async function pkceChallenge(v){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return base64Url(new Uint8Array(h))}
-function redirectUri(){return window.location.origin+window.location.pathname}
-async function loginGoogle(){const msg=$('authMsg');try{if(!window.crypto?.subtle)throw Error('Browser tidak mendukung PKCE');const v=randomVerifier();localStorage.setItem('taastore_pkce_verifier',v);const c=await pkceChallenge(v);const p=new URLSearchParams({provider:'google',redirect_to:redirectUri(),code_challenge:c,code_challenge_method:'S256'});window.location.assign(SB+'/auth/v1/authorize?'+p.toString())}catch(e){if(msg)msg.textContent='Google Login gagal disiapkan: '+e.message}}
-function absorbAuthHash(){const raw=location.hash.startsWith('#')?location.hash.slice(1):'';if(!raw)return false;const q=new URLSearchParams(raw),access=q.get('access_token'),refresh=q.get('refresh_token');if(!access)return false;localStorage.setItem('taastore_access_token',access);if(refresh)localStorage.setItem('taastore_refresh_token',refresh);history.replaceState(null,document.title,location.pathname+location.search);return true}
-async function exchangeAuthCode(){const code=new URLSearchParams(location.search).get('code');if(!code)return false;const verifier=localStorage.getItem('taastore_pkce_verifier')||'';if(!verifier)throw Error('Kode login ditemukan, tetapi verifier tidak ada. Silakan login Google lagi.');const r=await fetch(SB+'/auth/v1/token?grant_type=pkce',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({auth_code:code,code_verifier:verifier})});let d=null;try{d=await r.json()}catch{}if(!r.ok)throw Error(d?.msg||d?.message||d?.error_description||'Kode login Google tidak dapat ditukar');if(!d.access_token)throw Error('Token login Google tidak diterima');localStorage.setItem('taastore_access_token',d.access_token);if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);localStorage.removeItem('taastore_pkce_verifier');history.replaceState(null,document.title,location.pathname);return true}
-async function refreshSession(){const rt=localStorage.getItem('taastore_refresh_token')||'';if(!rt)return false;try{const r=await fetch(SB+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:rt})});let x=null;try{x=await r.json()}catch{}if(!r.ok||!x?.access_token)throw Error();localStorage.setItem('taastore_access_token',x.access_token);if(x.refresh_token)localStorage.setItem('taastore_refresh_token',x.refresh_token);return true}catch{return false}}
-async function refreshAuth(){try{let u;try{u=await req('/auth/v1/user')}catch(e){if(!(await refreshSession()))throw e;u=await req('/auth/v1/user')}currentUser=u?.user||u;currentIsAdmin=false;const email=(currentUser?.email||'').trim().toLowerCase();if(email){try{const qs=new URLSearchParams({select:'is_admin,premium_override',email:'eq.'+email,limit:'1'});const r=await req('/rest/v1/taastore_admin_access?'+qs.toString());currentIsAdmin=!!r?.[0]?.is_admin}catch{currentIsAdmin=false}if(email==='tirtatyasamal@gmail.com')currentIsAdmin=true}const name=(currentUser?.user_metadata?.full_name||currentUser?.user_metadata?.name||currentUser?.email||'Akun').split('@')[0];const b=$('accountBtn');if(b){b.textContent=currentIsAdmin?name+' · Admin':name;b.title='Buka Akun Saya'}const ml=$('menuAccountLabel');if(ml)ml.textContent=currentIsAdmin?'Akun Saya · Admin':'Akun Saya';return true}catch{currentUser=null;currentIsAdmin=false;const b=$('accountBtn');if(b)b.textContent='Login';const ml=$('menuAccountLabel');if(ml)ml.textContent='Akun Saya';return false}}
-async function logoutUser(){localStorage.removeItem('taastore_access_token');localStorage.removeItem('taastore_refresh_token');localStorage.removeItem('taastore_pkce_verifier');currentUser=null;currentIsAdmin=false;const b=$('accountBtn');if(b)b.textContent='Login';closeAuth()}
-function initAuth(){
-  window.addEventListener('DOMContentLoaded',async()=>{
-    const form=$('authForm');
-    if(form)form.addEventListener('submit',async e=>{
-      e.preventDefault();
-      const msg=$('authMsg');
-      if(msg)msg.textContent='Memproses...';
-      try{
-        const email=$('authEmail').value.trim();
-        const password=$('authPassword').value;
-        if(signup){
-          const d=await req('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password})});
-          if(d?.access_token){
-            localStorage.setItem('taastore_access_token',d.access_token);
-            if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);
-            const ok=await refreshAuth();
-            if(!ok||!currentUser)throw Error('Pendaftaran berhasil tetapi sesi belum terbentuk. Coba login dengan email tersebut.');
-            if(msg)msg.textContent='Akun berhasil dibuat dan sudah login.';
-            signup=false;toggleAuthMode();
-            const resumePremium=pendingPremiumCheckout;
-            pendingPremiumCheckout=false;
-            sessionStorage.removeItem('taastore_pending_premium_package');
-            if(resumePremium){
-              closeAuth(false);
-              $('premiumMsg').textContent='Akun berhasil dibuat. Lanjutkan checkout Premium.';
-              $('premiumCheckout').classList.remove('hidden');
-              $('checkoutPackage').textContent=selectedPremiumPackage?.label||'';
-              $('checkoutAmount').textContent=money(selectedPremiumPackage?.amount||0);
-              $('premiumUploadMsg').textContent='';
-              $('premiumProof').value='';
-            }
-          }else{
-            if(msg)msg.textContent='Akun berhasil dibuat. Silakan cek email untuk konfirmasi, lalu login dengan email dan password tersebut.';
-            signup=false;toggleAuthMode();
-          }
-        }else{
-          const d=await req('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
-          localStorage.setItem('taastore_access_token',d.access_token);
-          if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);
-          const ok=await refreshAuth();
-          if(!ok||!currentUser)throw Error('Login berhasil tetapi sesi belum terbentuk. Coba login lagi.');
-          if(msg)msg.textContent='Login berhasil.';
-          if(pendingAccountSection){const sec=pendingAccountSection;pendingAccountSection='';renderAccount();showAccountSection(sec)}
-          const resumePremium=pendingPremiumCheckout;
-          pendingPremiumCheckout=false;
-          sessionStorage.removeItem('taastore_pending_premium_package');
-          sessionStorage.removeItem('taastore_pending_account_section');
-          closeAuth(false);
-          if(resumePremium){
-            $('premiumMsg').textContent='Login berhasil. Lanjutkan checkout Premium.';
-            $('premiumCheckout').classList.remove('hidden');
-            $('checkoutPackage').textContent=selectedPremiumPackage?.label||'';
-            $('checkoutAmount').textContent=money(selectedPremiumPackage?.amount||0);
-            $('premiumUploadMsg').textContent='';
-            $('premiumProof').value='';
-          }
-        }
-      }catch(x){if(msg)msg.textContent=x.message||'Proses autentikasi gagal.';}
-    });
-    const m=$('authModal');
-    if(m)m.addEventListener('click',e=>{if(e.target===m)closeAuth()});
-    await initAuthState();
-    const open=new URLSearchParams(location.search).get('open');
-    if(open==='history'){history.replaceState(null,document.title,location.pathname);openHistory()}
-  });
-}
-async function initAuthState(){let googleCompleted=false;try{await absorbAuthHash();googleCompleted=await exchangeAuthCode()}catch(e){const msg=$('authMsg');if(msg)msg.textContent='Login Google gagal: '+e.message}await refreshAuth();if(googleCompleted&&currentUser){const pkg=sessionStorage.getItem('taastore_pending_premium_package')||'';if(pkg){selectedPremiumPackage=premiumPackages.find(p=>p.package_id===pkg)||PREMIUM_FALLBACK[pkg]||null;sessionStorage.removeItem('taastore_pending_premium_package');if(selectedPremiumPackage){$('premiumMsg').textContent='Login Google berhasil. Lanjutkan checkout Premium.';$('premiumCheckout').classList.remove('hidden');$('checkoutPackage').textContent=selectedPremiumPackage.label;$('checkoutAmount').textContent=money(selectedPremiumPackage.amount);$('premiumUploadMsg').textContent='';$('premiumProof').value='';}}const sec=sessionStorage.getItem('taastore_pending_account_section')||'';if(sec){sessionStorage.removeItem('taastore_pending_account_section');openAuth(sec)}}}
-initAuth();
-document.addEventListener('click',e=>{const btn=$('hambBtn'),m=$('menu');if(m&&btn&&!btn.contains(e.target)&&!m.contains(e.target))closeMenu()});
 
-const forbidden=/^(wl|world\s*lock|dl|diamond\s*lock|bgl|blue\s*gem\s*lock)$/i;const providerUrl=localStorage.getItem('taastore_vend_provider_url')||'';function validItem(q){return q.length>=2&&!forbidden.test(q.trim().replace(/\s+/g,' '))}function esc(s){return String(s??'').replace(/[&<>\'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}async function searchVend(){const q=itemSearch.value.trim();if(!validItem(q)){vendMsg.textContent='Item ini tidak tersedia di Vend Locator. Silakan cari item normal.';results.innerHTML='';return}vendMsg.textContent='Mencari...';try{let d;if(providerUrl){const r=await fetch(providerUrl+'?item='+encodeURIComponent(q),{headers:{Accept:'application/json'}});if(!r.ok)throw Error();d=await r.json();providerState.textContent='DATA: PROVIDER'}else{d=await req('/rest/v1/vend_listings?select=item_name,world_name,price_text,machine_x,machine_y,source,updated_at&item_name=ilike.*'+encodeURIComponent(q)+'*&order=updated_at.desc&limit=40');providerState.textContent='DATA: SUPABASE CACHE'}const rows=Array.isArray(d)?d:(d.results||[]);if(!rows.length){vendMsg.textContent='Belum ada hasil pada data layer TAASTORE.';results.innerHTML='';return}vendMsg.textContent=`${rows.length} hasil`;results.innerHTML=rows.map(x=>`<article class="glass rounded-2xl p-4"><div class="flex justify-between gap-3"><b>${esc(x.item_name||q)}</b><span class="text-amber-300 font-black">${esc(x.price_text||'Harga —')}</span></div><div class="text-sm text-cyan-300 mt-2">${esc(x.world_name||'WORLD')}</div><div class="text-[10px] text-slate-500 mt-2">${x.machine_x!=null?'Machine: '+x.machine_x+','+x.machine_y:''} ${x.source?'• '+esc(x.source):''}</div></article>`).join('')}catch{providerState.textContent='DATA: OFFLINE';vendMsg.textContent='Data provider/cache belum terhubung.'}}let scanType='block';function setScanType(type){scanType=type;document.getElementById('scanTypeBlock')?.classList.toggle('active',type==='block');document.getElementById('scanTypeFloating')?.classList.toggle('active',type==='floating');}function renderScanRows(rows){scanRows.innerHTML=rows.map(x=>`<article class="scan-result-card rounded-2xl p-3 flex items-center gap-3"><div class="item-thumb flex items-center justify-center text-[9px] text-slate-600">${x.image_url?`<img src="${esc(x.image_url)}" class="w-full h-full object-contain" alt="">`:'ITEM'}</div><div class="min-w-0 flex-1"><div class="font-black truncate">${esc(x.item_name||'Unknown Item')}</div><div class="text-[10px] text-slate-500 mt-1">${scanType.toUpperCase()}</div></div><b class="text-cyan-300">${Number(x.quantity||0).toLocaleString('id-ID')}</b></article>`).join('')}async function runScan(){const w=scanWorld.value.trim().toUpperCase();if(!w){scanMsg.textContent='Masukkan world.';return}if(!token()){scanMsg.textContent='Login dulu untuk menjalankan GrowScan.';openAuth();return}scanMsg.textContent='Mengirim permintaan scan otomatis...';scanProviderState.textContent='SCAN: PROCESSING';scanResult.classList.add('hidden');const url=localStorage.getItem('taastore_growscan_provider_url')||'';try{if(!url)throw Error('provider');const r=await fetch(url+'?world='+encodeURIComponent(w)+'&scan_type='+encodeURIComponent(scanType),{headers:{Accept:'application/json',Authorization:'Bearer '+token()}});if(!r.ok)throw Error('provider');const d=await r.json();const result=d.result||d;scanResultTitle.textContent=`${w} • ${scanType.toUpperCase()}`;const img=result.watermarked_image_url||result.rendered_image_url||result.image_url||'';scanRenderedImage.src=img;scanImagePreview.classList.toggle('hidden',!img);renderScanRows(Array.isArray(result.items)?result.items:[]);scanResult.classList.remove('hidden');scanMsg.textContent='Scan selesai. Hasil memakai watermark TAASTORE.';scanProviderState.textContent='SCAN: LIVE'}catch{scanProviderState.textContent='SCAN: UI READY';scanMsg.textContent='UI GrowScan sudah siap. Processor/vision provider belum dikonfigurasi, jadi belum ada foto world yang bisa diambil otomatis.'}}async function runRender(){const w=renderWorld.value.trim();renderOut.textContent=w?'Render provider belum dikonfigurasi.':'Masukkan world.'}const PREMIUM_FALLBACK={
-  '1_day':{package_id:'1_day',label:'1 Hari',amount:5000,duration:1},
-  '7_day':{package_id:'7_day',label:'7 Hari',amount:20000,duration:7},
-  '30_day':{package_id:'30_day',label:'30 Hari',amount:50000,duration:30},
-  '90_day':{package_id:'90_day',label:'90 Hari',amount:120000,duration:90}
-};
-let premiumPackages=Object.values(PREMIUM_FALLBACK),selectedPremiumPackage=null;
-const money=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
+function renderAdminPremiumHistory(){
+  const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList');if(!msg||!list)return;
+  const filter=$('adminPremiumHistoryFilter')?.value||'recent';
+  const cutoff=Date.now()-30*24*60*60*1000;
+  let rows=adminPremiumHistoryRows.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  if(filter==='pending')rows=rows.filter(o=>String(o.status||'').toUpperCase()==='PENDING_VERIFICATION');
+  if(filter==='recent')rows=rows.filter(o=>String(o.status||'').toUpperCase()==='PENDING_VERIFICATION'||new Date(o.created_at||0).getTime()>=cutoff);
+  if(!rows.length){msg.textContent='Tidak ada order Premium pada filter ini.';list.innerHTML='';return}
+  const visible=rows.slice(0,adminPremiumHistoryLimit);
+  msg.textContent=rows.length+' order Premium · menampilkan '+visible.length;
+  renderPremiumRows(list,visible,'admin');
+  if(rows.length>visible.length)list.insertAdjacentHTML('beforeend','<button type="button" onclick="adminPremiumHistoryLimit+=20;renderAdminPremiumHistory()" class="px-4 py-3 rounded-xl border border-slate-700 text-xs font-black text-slate-300">Tampilkan 20 lagi</button>');
+}
+
+async function loadAdminPremiumHistory(){
+  const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList');if(!msg||!list)return;
+  if(!currentUser||!currentIsAdmin){msg.textContent='Akses Admin diperlukan.';list.innerHTML='';return}
+  msg.textContent='Memuat riwayat...';list.innerHTML='';adminPremiumHistoryLimit=20;
+  try{
+    const rows=await req('/rest/v1/rpc/admin_list_premium_orders',{method:'POST',body:'{}'});
+    // Normalize current admin RPC fields for the shared renderer and verifier.
+    adminPremiumHistoryRows=(Array.isArray(rows)?rows:[]).map(o=>({
+      ...o,
+      order_id:o.order_id||o.id,
+      duration:o.duration??o.duration_days,
+      verified_at:o.verified_at||o.reviewed_at
+    }));
+    renderAdminPremiumHistory();
+  }catch(e){console.error('Admin Premium history:',e);msg.textContent='Riwayat Premium Admin belum dapat dimuat.'}
+}
+
 function renderPremiumPackages(){
-  const box=$('premiumPackages'); if(!box)return;
-  box.innerHTML=premiumPackages.map(p=>`<button type="button" data-premium-plan="${p.package_id}" class="premium-plan"><b>${esc(p.label)}</b><div class="text-amber-300 font-black mt-2">${money(p.amount)}</div></button>`).join('');
+  const box=$('premiumPackages');if(!box)return;
+  box.innerHTML=premiumPackages.map(p=>`<button type="button" data-premium-plan="${esc(p.package_id)}" class="premium-plan"><b>${esc(p.label)}</b><div class="text-amber-300 font-black mt-2">${money(p.amount)}</div></button>`).join('');
 }
-async function loadPremiumPackages(){
-  // Harga publik sengaja memakai source-of-truth frontend agar DB lama tidak mengembalikan harga versi lama.
-  premiumPackages=Object.values(PREMIUM_FALLBACK);
-  renderPremiumPackages();
-}
+async function loadPremiumPackages(){renderPremiumPackages()}
+function closePremiumCheckout(){ $('premiumCheckout')?.classList.add('hidden');selectedPremiumPackage=null }
 
-function closePremiumCheckout(){$('premiumCheckout')?.classList.add('hidden');selectedPremiumPackage=null}
 async function choosePlan(plan){
-  selectedPremiumPackage=premiumPackages.find(p=>p.package_id===plan)||PREMIUM_FALLBACK[plan];
+  selectedPremiumPackage=premiumPackages.find(p=>p.package_id===plan)||null;
   if(!selectedPremiumPackage){$('premiumMsg').textContent='Paket tidak ditemukan.';return}
-  // Respons UI harus langsung saat user belum login; jangan menunggu request Auth.
-  if(!token()){
+  if(!token()||!currentUser){
     pendingPremiumCheckout=true;
     sessionStorage.setItem('taastore_pending_premium_package',selectedPremiumPackage.package_id);
-    $('premiumMsg').textContent='Paket bisa dilihat tanpa login. Login diperlukan untuk melanjutkan checkout.';
-    openAuth();
-    return;
+    $('premiumMsg').textContent='Harga dapat dilihat tanpa login. Login diperlukan untuk melanjutkan checkout.';
+    openAuth();return;
   }
-  const authOk=await refreshAuth();
-  if(!authOk||!currentUser){
-    pendingPremiumCheckout=true;
-    sessionStorage.setItem('taastore_pending_premium_package',selectedPremiumPackage.package_id);
-    $('premiumMsg').textContent='Sesi login perlu diperbarui. Silakan login kembali.';
-    openAuth();
-    return;
-  }
+  await refreshAuth();
+  if(!currentUser){pendingPremiumCheckout=true;sessionStorage.setItem('taastore_pending_premium_package',selectedPremiumPackage.package_id);$('premiumMsg').textContent='Sesi login perlu diperbarui. Silakan login kembali.';openAuth();return}
   if(currentIsAdmin){$('premiumMsg').textContent='Akun ADMIN · Premium Tools aktif tanpa pembayaran.';return}
   $('premiumCheckout').classList.remove('hidden');
   $('checkoutPackage').textContent=selectedPremiumPackage.label;
   $('checkoutAmount').textContent=money(selectedPremiumPackage.amount);
-  $('premiumUploadMsg').textContent='';
-  $('premiumProof').value='';
+  $('premiumUploadMsg').textContent='';$('premiumProof').value='';
 }
+
 async function submitPremiumProof(){
-  if(!currentUser){
-    if(!token()){$('premiumUploadMsg').textContent='Login diperlukan untuk checkout.';openAuth();return}
-    const authOk=await refreshAuth();
-    if(!authOk||!currentUser){$('premiumUploadMsg').textContent='Sesi login perlu diperbarui. Silakan login kembali.';openAuth();return}
-  }
-  if(currentIsAdmin){$('premiumUploadMsg').textContent='Admin tidak perlu melakukan pembayaran.';return}
-  if(!selectedPremiumPackage){$('premiumUploadMsg').textContent='Pilih paket terlebih dahulu.';return}
-  const file=$('premiumProof').files?.[0];
-  if(!file){$('premiumUploadMsg').textContent='Pilih foto bukti pembayaran terlebih dahulu.';return}
-  if(!file.type.startsWith('image/')){$('premiumUploadMsg').textContent='Bukti harus berupa gambar.';return}
-  if(file.size>8*1024*1024){$('premiumUploadMsg').textContent='Ukuran bukti maksimal 8 MB.';return}
-  $('premiumSubmit').disabled=true;$('premiumUploadMsg').textContent='Membuat order...';
+  const msg=$('premiumUploadMsg');
   try{
-    const created=await req('/rest/v1/rpc/create_premium_order_v2',{method:'POST',body:JSON.stringify({p_package:selectedPremiumPackage.package_id})});
-    const order=Array.isArray(created)?created[0]:created;
-    if(!order?.order_id)throw Error('Order Premium tidak dibuat.');
-    rememberPremiumOrderId(order.order_id);
-    const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';
-    const path=`${currentUser.id}/${order.order_id}.${ext}`;
+    if(!currentUser)await refreshAuth();
+    if(!currentUser){msg.textContent='Login diperlukan untuk checkout.';openAuth();return}
+    if(currentIsAdmin){msg.textContent='Admin tidak perlu melakukan pembayaran.';return}
+    if(!selectedPremiumPackage){msg.textContent='Pilih paket terlebih dahulu.';return}
+    const file=$('premiumProof').files?.[0];
+    if(!file){msg.textContent='Pilih foto bukti pembayaran terlebih dahulu.';return}
+    if(!file.type.startsWith('image/')){msg.textContent='Bukti harus berupa gambar.';return}
+    if(file.size>8*1024*1024){msg.textContent='Ukuran bukti maksimal 8 MB.';return}
+    $('premiumSubmit').disabled=true;msg.textContent='Membuat order Premium...';
+
+    // Exact function contract. user_id is assigned by auth.uid() on the server.
+    const created=await req('/rest/v1/rpc/create_premium_order',{method:'POST',body:JSON.stringify({p_package:selectedPremiumPackage.package_id})});
+    // Current database contract: create_premium_order(text) returns the order UUID directly.
+    const orderId=Array.isArray(created)?created[0]:created;
+    if(typeof orderId!=='string'||!orderId)throw new Error('Order Premium tidak dibuat.');
+
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'jpg';
+    const path=currentUser.id+'/'+orderId+'.'+ext;
+    msg.textContent='Mengunggah bukti pembayaran...';
     const upload=await fetch(SB+'/storage/v1/object/premium-proofs/'+encodeURIComponent(path).replace(/%2F/g,'/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+token(),'x-upsert':'false','Content-Type':file.type},body:file});
-    if(!upload.ok){let d={};try{d=await upload.json()}catch{}throw Error(d?.message||'Upload bukti gagal.')}
-    await req('/rest/v1/rpc/attach_premium_payment_proof_v4',{method:'POST',body:JSON.stringify({p_order_id:order.order_id,p_path:path})});
-    const verifyText=`Halo Admin TAASTORE.GT
+    const uploadData=await upload.json().catch(()=>null);
+    if(!upload.ok)throw new Error(uploadData?.message||uploadData?.error||`Upload bukti gagal (${upload.status}).`);
 
-Saya sudah melakukan pembayaran Premium.
-Order ID: #${order.order_id}
-
-Mohon bantu verifikasi ya. Terima kasih 🙏`;
-    const verifyBtn=$('premiumFastVerify');
-    if(verifyBtn){verifyBtn.href=`https://wa.me/6282123602358?text=${encodeURIComponent(verifyText)}`;verifyBtn.classList.remove('hidden');}
-    $('premiumUploadMsg').textContent=`Order ${order.order_id} berhasil dikirim dan menunggu verifikasi admin.`;
-    const quickHtml=`<div class="mt-3"><a href="https://wa.me/6282123602358?text=${encodeURIComponent(verifyText)}" target="_blank" rel="noopener noreferrer" class="inline-flex w-full justify-center border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 font-black py-3 rounded-2xl">💬 Butuh Verifikasi Cepat via WhatsApp</a></div>`;
-    $('premiumMsg').innerHTML='Bukti pembayaran berhasil dikirim.'+quickHtml;closePremiumCheckout();
-  }catch(e){$('premiumUploadMsg').textContent=e.message||'Pengiriman bukti gagal.'}
+    msg.textContent='Menyimpan bukti ke order...';
+    await req('/rest/v1/rpc/attach_premium_payment_proof',{method:'POST',body:JSON.stringify({p_order_id:orderId,p_path:path})});
+    $('premiumMsg').textContent='Bukti pembayaran berhasil dikirim. Order menunggu verifikasi admin.';
+    closePremiumCheckout();
+  }catch(e){console.error('Premium checkout:',e);msg.textContent=e.message||'Pengiriman bukti gagal.'}
   finally{$('premiumSubmit').disabled=false}
+}
+
+async function verifyPremiumOrder(orderId,approve){
+  if(!currentUser||!currentIsAdmin)return;
+  try{
+    const reason=approve?null:'Order ditolak oleh Admin.';
+    await req('/rest/v1/rpc/admin_verify_premium_order',{method:'POST',body:JSON.stringify({p_order_id:orderId,p_approve:approve,p_reason:reason})});
+    await loadAdminPremiumHistory();
+  }catch(e){alert(e.message||'Verifikasi order gagal.')}
+}
+
+function base64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function randomVerifier(n=64){const a=new Uint8Array(n);crypto.getRandomValues(a);return base64Url(a)}
+async function pkceChallenge(v){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return base64Url(new Uint8Array(h))}
+function redirectUri(){return window.location.origin+window.location.pathname}
+async function loginGoogle(){
+  try{
+    const v=randomVerifier();localStorage.setItem('taastore_pkce_verifier',v);
+    const c=await pkceChallenge(v);
+    const p=new URLSearchParams({provider:'google',redirect_to:redirectUri(),code_challenge:c,code_challenge_method:'S256'});
+    window.location.assign(SB+'/auth/v1/authorize?'+p.toString());
+  }catch(e){$('authMsg').textContent='Google Login gagal disiapkan: '+e.message}
+}
+function absorbAuthHash(){
+  const raw=location.hash.startsWith('#')?location.hash.slice(1):'';if(!raw)return false;
+  const q=new URLSearchParams(raw),a=q.get('access_token'),r=q.get('refresh_token');if(!a)return false;
+  localStorage.setItem('taastore_access_token',a);if(r)localStorage.setItem('taastore_refresh_token',r);
+  history.replaceState(null,document.title,location.pathname+location.search);return true;
+}
+async function exchangeAuthCode(){
+  const code=new URLSearchParams(location.search).get('code');if(!code)return false;
+  const verifier=localStorage.getItem('taastore_pkce_verifier')||'';if(!verifier)throw new Error('Verifier Google tidak ditemukan. Silakan login Google lagi.');
+  const r=await fetch(SB+'/auth/v1/token?grant_type=pkce',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({auth_code:code,code_verifier:verifier})});
+  const d=await r.json().catch(()=>null);if(!r.ok||!d?.access_token)throw new Error(d?.msg||d?.message||'Kode Google tidak dapat ditukar');
+  localStorage.setItem('taastore_access_token',d.access_token);if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);localStorage.removeItem('taastore_pkce_verifier');
+  history.replaceState(null,document.title,location.pathname);return true;
+}
+async function logoutUser(){
+  try{if(token())await fetch(SB+'/auth/v1/logout',{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+token(),'Content-Type':'application/json'}})}catch{}
+  localStorage.removeItem('taastore_access_token');localStorage.removeItem('taastore_refresh_token');localStorage.removeItem('taastore_pkce_verifier');currentUser=null;currentIsAdmin=false;closeAuth();$('accountBtn').textContent='Login';
+}
+
+function initAuth(){
+  window.addEventListener('DOMContentLoaded',async()=>{
+    $('authForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();const msg=$('authMsg');msg.textContent='Memproses...';
+      try{
+        const email=$('authEmail').value.trim(),password=$('authPassword').value;
+        if(signup){
+          const d=await req('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password})});
+          if(d?.access_token){localStorage.setItem('taastore_access_token',d.access_token);if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);await refreshAuth();}
+          else{signup=false;toggleAuthMode();msg.textContent='Akun berhasil dibuat. Silakan cek email konfirmasi lalu login.';return}
+          signup=false;toggleAuthMode();msg.textContent='Akun berhasil dibuat dan sudah login.';
+        }else{
+          const d=await req('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
+          if(!d?.access_token)throw new Error('Token login tidak diterima.');
+          localStorage.setItem('taastore_access_token',d.access_token);if(d.refresh_token)localStorage.setItem('taastore_refresh_token',d.refresh_token);
+          if(!await refreshAuth())throw new Error('Login berhasil tetapi sesi belum terbentuk.');
+          msg.textContent='Login berhasil.';
+        }
+        const sec=pendingAccountSection||sessionStorage.getItem('taastore_pending_account_section')||'';
+        const pkg=sessionStorage.getItem('taastore_pending_premium_package')||'';
+        pendingAccountSection='';sessionStorage.removeItem('taastore_pending_account_section');
+        if(pkg){selectedPremiumPackage=premiumPackages.find(p=>p.package_id===pkg)||null;sessionStorage.removeItem('taastore_pending_premium_package');pendingPremiumCheckout=true}
+        closeAuth(false);
+        if(sec)showAccountSection(sec);
+        if(pendingPremiumCheckout&&selectedPremiumPackage){pendingPremiumCheckout=false;choosePlan(selectedPremiumPackage.package_id)}
+      }catch(e){msg.textContent=e.message||'Proses autentikasi gagal.'}
+    });
+    $('authModal')?.addEventListener('click',e=>{if(e.target===$('authModal'))closeAuth()});
+    let googleCompleted=false;try{absorbAuthHash();googleCompleted=await exchangeAuthCode()}catch(e){$('authMsg').textContent='Login Google gagal: '+e.message}
+    await refreshAuth();
+    if(googleCompleted&&currentUser){const pkg=sessionStorage.getItem('taastore_pending_premium_package')||'';if(pkg){selectedPremiumPackage=premiumPackages.find(p=>p.package_id===pkg)||null;sessionStorage.removeItem('taastore_pending_premium_package');if(selectedPremiumPackage){$('premiumMsg').textContent='Login Google berhasil. Lanjutkan checkout Premium.';$('premiumCheckout').classList.remove('hidden');$('checkoutPackage').textContent=selectedPremiumPackage.label;$('checkoutAmount').textContent=money(selectedPremiumPackage.amount)}}}
+    const open=new URLSearchParams(location.search).get('open');if(open==='history'){history.replaceState(null,document.title,location.pathname);openHistoryFromMenu()}
+  });
 }
 
 function bindToolInteractions(){
   document.addEventListener('click',e=>{
-    const premium=e.target.closest?.('[data-premium-plan]');
-    if(premium){e.preventDefault();e.stopPropagation();const plan=premium.getAttribute('data-premium-plan');if(plan)choosePlan(plan);return;}
+    const plan=e.target.closest?.('[data-premium-plan]');if(plan){e.preventDefault();choosePlan(plan.getAttribute('data-premium-plan'));return}
     const el=e.target.closest?.('[data-action]');const action=el?.getAttribute('data-action');
-    if(!action)return;e.preventDefault();e.stopPropagation();
-    if(action==='open-auth')openAuth();else if(action==='toggle-menu')toggleMenu();else if(action==='open-auth-menu')openAuthFromMenu();else if(action==='open-history-menu')openHistoryFromMenu();
-  },true);
+    if(action==='toggle-menu')toggleMenu();
+    if(action==='open-auth')openAuth();
+    if(action==='open-auth-menu')openAuth();
+    if(action==='open-history-menu')openHistoryFromMenu();
+  });
 }
-bindToolInteractions();
-loadPremiumPackages();refreshAuth();
 
-function showTool(id){document.querySelectorAll('.tool-panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tool-tab').forEach(x=>x.classList.remove('active'));document.getElementById(id)?.classList.add('active');document.querySelector('[data-tool="'+id+'"]')?.classList.add('active');if(history.replaceState)history.replaceState(null,'','#'+id)}
-window.addEventListener('hashchange',()=>{const id=location.hash.replace('#','');if(['vend','scan','render','premium'].includes(id))showTool(id)});window.addEventListener('load',()=>{const id=location.hash.replace('#','');showTool(['vend','scan','render','premium'].includes(id)?id:'vend')});
+initAuth();
+bindToolInteractions();
+loadPremiumPackages();
+
+// Non-Premium tools: existing UI/provider integrations are preserved.
+const forbidden=/^(wl|world\s*lock|dl|diamond\s*lock|bgl|blue\s*gem\s*lock)$/i;
+const providerUrl=localStorage.getItem('taastore_vend_provider_url')||'';
+function validItem(q){return q.length>=2&&!forbidden.test(q.trim().replace(/\s+/g,' '))}
+async function searchVend(){
+  const q=$('itemSearch').value.trim();if(!validItem(q)){$('vendMsg').textContent='Item ini tidak tersedia di Vend Locator. Silakan cari item normal.';$('results').innerHTML='';return}
+  $('vendMsg').textContent='Mencari...';
+  try{
+    let d;
+    if(providerUrl){const r=await fetch(providerUrl+'?item='+encodeURIComponent(q),{headers:{Accept:'application/json'}});if(!r.ok)throw new Error();d=await r.json();$('providerState').textContent='DATA: PROVIDER'}
+    else{d=await req('/rest/v1/vend_listings?select=item_name,world_name,price_text,machine_x,machine_y,source,updated_at&item_name=ilike.*'+encodeURIComponent(q)+'*&order=updated_at.desc&limit=40');$('providerState').textContent='DATA: SUPABASE CACHE'}
+    const rows=Array.isArray(d)?d:(d?.results||[]);if(!rows.length){$('vendMsg').textContent='Belum ada hasil pada data layer TAASTORE.';$('results').innerHTML='';return}
+    $('vendMsg').textContent=rows.length+' hasil';$('results').innerHTML=rows.map(x=>`<article class="glass rounded-2xl p-4"><div class="flex justify-between gap-3"><b>${esc(x.item_name||q)}</b><span class="text-amber-300 font-black">${esc(x.price_text||'Harga —')}</span></div><div class="text-sm text-cyan-300 mt-2">${esc(x.world_name||'WORLD')}</div><div class="text-[10px] text-slate-500 mt-2">${x.machine_x!=null?'Machine: '+x.machine_x+','+x.machine_y:''} ${x.source?'• '+esc(x.source):''}</div></article>`).join('');
+  }catch{$('providerState').textContent='DATA: OFFLINE';$('vendMsg').textContent='Data provider/cache belum terhubung.'}
+}
+let scanType='block';
+function setScanType(type){scanType=type;$('scanTypeBlock')?.classList.toggle('active',type==='block');$('scanTypeFloating')?.classList.toggle('active',type==='floating')}
+function renderScanRows(rows){$('scanRows').innerHTML=rows.map(x=>`<article class="scan-result-card rounded-2xl p-3 flex items-center gap-3"><div class="item-thumb flex items-center justify-center text-[9px] text-slate-600">${x.image_url?`<img src="${esc(x.image_url)}" class="w-full h-full object-contain" alt="">`:'ITEM'}</div><div class="min-w-0 flex-1"><div class="font-black truncate">${esc(x.item_name||'Unknown Item')}</div><div class="text-[10px] text-slate-500 mt-1">${scanType.toUpperCase()}</div></div><b class="text-cyan-300">${Number(x.quantity||0).toLocaleString('id-ID')}</b></article>`).join('')}
+async function runScan(){
+  const w=$('scanWorld').value.trim().toUpperCase();if(!w){$('scanMsg').textContent='Masukkan world.';return}
+  if(!token()){$('scanMsg').textContent='Login dulu untuk menjalankan GrowScan.';openAuth();return}
+  $('scanMsg').textContent='Mengirim permintaan scan otomatis...';$('scanProviderState').textContent='SCAN: PROCESSING';$('scanResult').classList.add('hidden');
+  const url=localStorage.getItem('taastore_growscan_provider_url')||'';
+  try{if(!url)throw new Error('provider');const r=await fetch(url+'?world='+encodeURIComponent(w)+'&scan_type='+encodeURIComponent(scanType),{headers:{Accept:'application/json',Authorization:'Bearer '+token()}});if(!r.ok)throw new Error();const d=await r.json();const result=d.result||d;$('scanResultTitle').textContent=w+' • '+scanType.toUpperCase();const img=result.watermarked_image_url||result.rendered_image_url||result.image_url||'';$('scanRenderedImage').src=img;$('scanImagePreview').classList.toggle('hidden',!img);renderScanRows(Array.isArray(result.items)?result.items:[]);$('scanResult').classList.remove('hidden');$('scanMsg').textContent='Scan selesai. Hasil memakai watermark TAASTORE.';$('scanProviderState').textContent='SCAN: LIVE'}catch{$('scanProviderState').textContent='SCAN: UI READY';$('scanMsg').textContent='UI GrowScan sudah siap. Processor/vision provider belum dikonfigurasi, jadi belum ada foto world yang bisa diambil otomatis.'}}
+async function runRender(){const w=$('renderWorld').value.trim();$('renderOut').textContent=w?'Render provider belum dikonfigurasi.':'Masukkan world.'}
+function showTool(id){document.querySelectorAll('.tool-panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tool-tab').forEach(x=>x.classList.remove('active'));$(id)?.classList.add('active');document.querySelector('[data-tool="'+id+'"]')?.classList.add('active');if(history.replaceState)history.replaceState(null,'','#'+id)}
+window.addEventListener('hashchange',()=>{const id=location.hash.replace('#','');if(['vend','scan','render','premium'].includes(id))showTool(id)});
+window.addEventListener('load',()=>{const id=location.hash.replace('#','');showTool(['vend','scan','render','premium'].includes(id)?id:'vend')});
+
 </script></body></html>
