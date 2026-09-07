@@ -140,15 +140,8 @@ async function refreshAuth(){
     try{u=await req('/auth/v1/user')}catch(e){if(!(await refreshSession()))throw e;u=await req('/auth/v1/user')}
     currentUser=u?.user||u;
     if(!currentUser?.id)throw new Error('User session tidak valid.');
-    currentIsAdmin=false;
+    currentIsAdmin=await refreshAdminRole();
     const email=String(currentUser.email||'').trim().toLowerCase();
-    if(email){
-      try{
-        const rows=await req('/rest/v1/taastore_admin_access?select=is_admin&email=eq.'+encodeURIComponent(email)+'&limit=1');
-        currentIsAdmin=rows?.[0]?.is_admin===true;
-      }catch{}
-      if(email==='tirtatyasamal@gmail.com')currentIsAdmin=true;
-    }
     const name=(currentUser.user_metadata?.full_name||currentUser.user_metadata?.name||email.split('@')[0]||'Akun').trim();
     const btn=$('accountBtn');
     if(btn){btn.textContent=currentIsAdmin?name+' · Admin':name;btn.title='Buka Akun Saya'}
@@ -304,34 +297,27 @@ function renderAdminPremiumHistory(){
   if(rows.length>visible.length)list.insertAdjacentHTML('beforeend','<button type="button" onclick="adminPremiumHistoryLimit+=20;renderAdminPremiumHistory()" class="px-4 py-3 rounded-xl border border-slate-700 text-xs font-black text-slate-300">Tampilkan 20 lagi</button>');
 }
 
-async function adminPremiumRpc(path,body={}){
-  if(!currentUser)throw new Error('Sesi Admin belum tersedia.');
-  const call=async()=>{
-    const access=token();
-    if(!access)throw new Error('Token sesi Admin tidak tersedia. Silakan login kembali.');
-    const r=await fetch(SB+path,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+access,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(body)});
-    let d=null;try{d=await r.json()}catch{}
-    if(!r.ok){
-      const e=new Error(d?.message||d?.hint||d?.details||d?.error_description||d?.error||`HTTP ${r.status}`);
-      if(String(e.message).includes('admin_get_premium_orders_v2'))e.message='ADMIN_FUNCTION_NOT_READY';
-      e.status=r.status;e.payload=d;throw e;
-    }
-    return d;
-  };
-  try{return await call()}catch(e){
-    if((e.status===401||e.status===403)&&await refreshSession())return call();
-    throw e;
-  }
+async function adminPremiumCall(path,body={}){
+  if(!currentUser?.id)throw new Error('LOGIN_REQUIRED');
+  const raw=await req(path,{method:'POST',body:JSON.stringify(body)});
+  if(raw&&raw.error==='ADMIN_REQUIRED')throw new Error('ADMIN_REQUIRED');
+  return raw;
+}
+
+async function refreshAdminRole(){
+  if(!currentUser?.id)return false;
+  try{
+    const raw=await adminPremiumCall('/rest/v1/rpc/premium_admin_is_admin_v1',{});
+    return raw===true || raw?.is_admin===true || raw?.[0]?.is_admin===true;
+  }catch{return false}
 }
 
 async function loadAdminPremiumHistory(){
   const msg=$('adminPremiumHistoryMsg'),list=$('adminPremiumHistoryList');if(!msg||!list)return;
-  if(!currentUser||!currentIsAdmin){msg.textContent='Akses Admin diperlukan.';list.innerHTML='';return}
-  msg.textContent='Memuat riwayat...';list.innerHTML='';adminPremiumHistoryLimit=20;
+  if(!currentUser){msg.textContent='Login diperlukan.';list.innerHTML='';return}
+  msg.textContent='Memuat riwayat Premium...';list.innerHTML='';adminPremiumHistoryLimit=20;
   try{
-    // Admin-only path: use the authenticated Admin JWT directly so this flow is
-    // independent from the buyer Premium order loaders.
-    const raw=await adminPremiumRpc('/rest/v1/rpc/admin_get_premium_orders_v3',{});
+    const raw=await adminPremiumCall('/rest/v1/rpc/premium_admin_get_orders_v1',{});
     const rows=Array.isArray(raw)?raw:(Array.isArray(raw?.orders)?raw.orders:[]);
     adminPremiumHistoryRows=rows.map(o=>({
       ...o,
@@ -339,10 +325,35 @@ async function loadAdminPremiumHistory(){
       duration:o.duration??o.duration_days,
       verified_at:o.verified_at||o.reviewed_at
     }));
+    currentIsAdmin=true;
+    renderAccount();
     renderAdminPremiumHistory();
   }catch(e){
     console.error('Admin Premium history:',e);
-    msg.textContent=(e?.message==='ADMIN_REQUIRED'?'Sesi Admin tidak dikenali oleh server. Silakan logout lalu login kembali.':e?.message==='ADMIN_FUNCTION_NOT_READY'?'Fungsi Admin Premium belum terpasang di Supabase. Jalankan SQL V20.0 yang disertakan di ZIP.':'Riwayat Premium Admin belum dapat dimuat.');
+    msg.textContent=String(e?.message||'')==='ADMIN_REQUIRED'
+      ?'Akun ini tidak memiliki akses Admin Premium.'
+      :'Riwayat Premium Admin belum dapat dimuat.';
+    if(String(e?.message||'')==='ADMIN_REQUIRED'){
+      currentIsAdmin=false;
+      renderAccount();
+    }
+  }
+}
+
+async function verifyPremiumOrder(orderId,approve){
+  if(!currentUser)return;
+  try{
+    const reason=approve?null:'Order ditolak oleh Admin.';
+    const result=await adminPremiumCall('/rest/v1/rpc/premium_admin_review_order_v1',{
+      p_order_id:orderId,
+      p_approve:approve,
+      p_reason:reason
+    });
+    if(result?.ok===false)throw new Error(result?.message||'Order tidak dapat diproses.');
+    await loadAdminPremiumHistory();
+  }catch(e){
+    console.error('Admin Premium verify:',e);
+    alert(e.message||'Verifikasi order gagal.');
   }
 }
 
@@ -403,15 +414,6 @@ async function submitPremiumProof(){
     closePremiumCheckout();
   }catch(e){console.error('Premium checkout:',e);msg.textContent=e.message||'Pengiriman bukti gagal.'}
   finally{$('premiumSubmit').disabled=false}
-}
-
-async function verifyPremiumOrder(orderId,approve){
-  if(!currentUser||!currentIsAdmin)return;
-  try{
-    const reason=approve?null:'Order ditolak oleh Admin.';
-    await adminPremiumRpc('/rest/v1/rpc/admin_review_premium_order_v3',{p_order_id:orderId,p_approve:approve,p_reason:reason});
-    await loadAdminPremiumHistory();
-  }catch(e){console.error('Admin Premium verify:',e);alert(e.message||'Verifikasi order gagal.')}
 }
 
 function base64Url(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
