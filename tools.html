@@ -38,7 +38,7 @@ html{scroll-behavior:smooth}body{background:var(--bg);color:#fff;font-family:Int
 .premium-checkout-grid{margin-top:16px}
 @media(max-width:900px){#premiumPackages{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:560px){#premiumPackages{grid-template-columns:1fr!important;gap:10px!important}#premiumPackages .premium-plan{min-height:70px;padding:12px}.premium-checkout-head{align-items:flex-start}.premium-checkout-grid{grid-template-columns:1fr!important}.premium-qris-card{padding:0!important}.premium-qris-card img{max-height:none;width:100%;height:auto}}
-</style></head><body class="gridbg min-h-screen" data-taastore-version="17.3"><header class="sticky top-0 z-50 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl">
+</style></head><body class="gridbg min-h-screen" data-taastore-version="18.1"><header class="sticky top-0 z-50 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl">
 <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
 <a href="index.html" class="flex items-center gap-3 min-w-0"><div class="w-10 h-10 rounded-xl overflow-hidden border border-cyan-400/30 bg-cyan-400/10 flex items-center justify-center shrink-0"><img src="logo.jpeg" alt="TAASTORE" class="w-full h-full object-cover" onerror="this.style.display='none';this.parentElement.textContent='T';this.parentElement.classList.add('text-cyan-300','font-black','text-lg')"></div><div class="min-w-0"><div class="font-black tracking-[.14em] text-amber-300 text-lg">TAASTORE</div><div class="text-[9px] text-cyan-300 tracking-[.22em] uppercase">Marketplace &amp; Tools</div></div></a>
 <div class="flex items-center gap-2 relative z-[60]"><a href="marketplace.html" class="hidden md:block px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:bg-white/5">Marketplace</a><a href="tools.html" class="hidden md:block px-3 py-2 rounded-xl text-xs font-bold text-cyan-300 bg-cyan-400/10">Tools</a><button id="accountBtn" data-action="open-auth" class="px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs font-bold hover:border-cyan-400/30 transition">Login</button><div class="relative"><button id="hambBtn" data-action="toggle-menu" class="w-11 h-11 rounded-xl border border-slate-700 bg-slate-900/70 hover:bg-slate-800 flex items-center justify-center transition" aria-label="Buka menu" aria-expanded="false"><span class="hamb"><span></span><span></span><span></span></span></button><div id="menu" class="menu absolute right-0 mt-2 w-64 glass rounded-2xl p-2 shadow-2xl">
@@ -153,7 +153,7 @@ async function loadPremiumOrdersBySavedIds(){
   if(!currentUser||currentIsAdmin)return [];
   const uid=String(currentUser.id||'').trim();
   if(!uid)throw Error('Identitas akun Premium belum tersedia.');
-  const fields='order_id,package,package_id,duration,duration_days,amount,status,created_at,verified_at,payment_proof_path';
+  const fields='order_id,package,duration,amount,status,created_at,verified_at,payment_proof';
   const failures=[];
   const normalize=raw=>Array.isArray(raw)?raw:(Array.isArray(raw?.data)?raw.data:(Array.isArray(raw?.orders)?raw.orders:null));
 
