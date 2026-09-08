@@ -307,7 +307,7 @@ async function adminPremiumCall(path,body={}){
 async function refreshAdminRole(){
   if(!currentUser?.id)return false;
   try{
-    const raw=await adminPremiumCall('/rest/v1/rpc/premium_admin_is_admin_v1',{});
+    const raw=await adminPremiumCall('/rest/v1/rpc/premium_admin_is_admin_v2',{});
     return raw===true || raw?.is_admin===true || raw?.[0]?.is_admin===true;
   }catch{return false}
 }
@@ -317,7 +317,7 @@ async function loadAdminPremiumHistory(){
   if(!currentUser){msg.textContent='Login diperlukan.';list.innerHTML='';return}
   msg.textContent='Memuat riwayat Premium...';list.innerHTML='';adminPremiumHistoryLimit=20;
   try{
-    const raw=await adminPremiumCall('/rest/v1/rpc/premium_admin_get_orders_v1',{});
+    const raw=await adminPremiumCall('/rest/v1/rpc/premium_admin_get_orders_v2',{});
     const rows=Array.isArray(raw)?raw:(Array.isArray(raw?.orders)?raw.orders:[]);
     adminPremiumHistoryRows=rows.map(o=>({
       ...o,
@@ -344,7 +344,7 @@ async function verifyPremiumOrder(orderId,approve){
   if(!currentUser)return;
   try{
     const reason=approve?null:'Order ditolak oleh Admin.';
-    const result=await adminPremiumCall('/rest/v1/rpc/premium_admin_review_order_v1',{
+    const result=await adminPremiumCall('/rest/v1/rpc/premium_admin_review_order_v2',{
       p_order_id:orderId,
       p_approve:approve,
       p_reason:reason
